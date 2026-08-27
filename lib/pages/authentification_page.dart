@@ -2,38 +2,55 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
-import 'navigation_page.dart';
-
 class AuthentificationPage extends StatefulWidget {
   const AuthentificationPage({super.key});
 
   @override
-  State<AuthentificationPage> createState() =>
-      _AuthentificationPageState();
+  State<AuthentificationPage> createState() => _AuthentificationPageState();
 }
 
-class _AuthentificationPageState
-    extends State<AuthentificationPage> {
-  bool estConnexion = true;
+class _AuthentificationPageState extends State<AuthentificationPage> {
+  // COULEUR PRINCIPALE
+
+  static const Color couleurPrincipale = Color(0xFF15576B);
+
+  // FORMULAIRE
+
+  final GlobalKey<FormState> formKey = GlobalKey<FormState>();
+
+  final TextEditingController nomController = TextEditingController();
+
+  final TextEditingController emailController = TextEditingController();
+
+  final TextEditingController motDePasseController = TextEditingController();
+
+  final TextEditingController confirmationController = TextEditingController();
+
+  // VARIABLES SIMPLES
+
+  bool connexion = true;
+
   bool accepterConditions = false;
+
   bool chargement = false;
 
-  final formKey = GlobalKey<FormState>();
+  bool masquerMotDePasse = true;
 
-  final nomController = TextEditingController();
-  final emailController = TextEditingController();
-  final motDePasseController = TextEditingController();
-  final confirmationController = TextEditingController();
+  bool masquerConfirmation = true;
+
+  // BONJOUR / BONSOIR
 
   String salutation() {
     final heure = DateTime.now().hour;
 
-    if (heure < 18) {
-      return 'Bonjour';
+    if (heure >= 18 || heure < 5) {
+      return 'Bonsoir';
     }
 
-    return 'Bonsoir';
+    return 'Bonjour';
   }
+
+  // LIBÉRATION DES CONTROLLERS
 
   @override
   void dispose() {
@@ -41,172 +58,230 @@ class _AuthentificationPageState
     emailController.dispose();
     motDePasseController.dispose();
     confirmationController.dispose();
+
     super.dispose();
   }
 
-  Future<void> authentifier() async {
-    if (!formKey.currentState!.validate()) {
-      return;
-    }
-
-    if (!estConnexion && !accepterConditions) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            'Vous devez accepter les conditions d’utilisation.',
-          ),
-        ),
-      );
-      return;
-    }
-
-    setState(() {
-      chargement = true;
-    });
-
-    try {
-      if (estConnexion) {
-        await FirebaseAuth.instance.signInWithEmailAndPassword(
-          email: emailController.text.trim(),
-          password: motDePasseController.text.trim(),
-        );
-      } else {
-        final credential =
-            await FirebaseAuth.instance
-                .createUserWithEmailAndPassword(
-          email: emailController.text.trim(),
-          password: motDePasseController.text.trim(),
-        );
-
-        final user = credential.user;
-
-        if (user != null) {
-          await user.updateDisplayName(
-            nomController.text.trim(),
-          );
-
-          await FirebaseFirestore.instance
-              .collection('utilisateurs')
-              .doc(user.uid)
-              .set({
-            'nom': nomController.text.trim(),
-            'email': emailController.text.trim(),
-            'dateCreation': FieldValue.serverTimestamp(),
-          });
-        }
-      }
-
-      if (!mounted) return;
-
-      Navigator.of(context).pushAndRemoveUntil(
-        MaterialPageRoute(
-          builder: (_) => const NavigationPage(),
-        ),
-        (route) => false,
-      );
-    } on FirebaseAuthException catch (e) {
-      if (!mounted) return;
-
-      String message = 'Une erreur est survenue.';
-
-      if (e.code == 'user-not-found') {
-        message = 'Aucun utilisateur trouvé avec cet email.';
-      } else if (e.code == 'wrong-password') {
-        message = 'Mot de passe incorrect.';
-      } else if (e.code == 'email-already-in-use') {
-        message = 'Cet email est déjà utilisé.';
-      } else if (e.code == 'invalid-email') {
-        message = 'Adresse email invalide.';
-      } else if (e.code == 'weak-password') {
-        message =
-            'Le mot de passe doit contenir au moins 6 caractères.';
-      } else if (e.code == 'invalid-credential') {
-        message = 'Email ou mot de passe incorrect.';
-      }
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(message)),
-      );
-    } catch (e) {
-      if (!mounted) return;
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            'Une erreur inattendue est survenue.',
-          ),
-        ),
-      );
-    } finally {
-      if (mounted) {
-        setState(() {
-          chargement = false;
-        });
-      }
-    }
-  }
+  // CHANGER CONNEXION / INSCRIPTION
 
   void changerMode() {
+    if (chargement) return;
+
     setState(() {
-      estConnexion = !estConnexion;
+      connexion = !connexion;
+
       accepterConditions = false;
+
+      motDePasseController.clear();
+      confirmationController.clear();
 
       formKey.currentState?.reset();
     });
   }
 
-  InputDecoration decoration({
+  // MESSAGE D'ERREUR FIREBASE
+
+  String messageErreurFirebase(FirebaseAuthException erreur) {
+    switch (erreur.code) {
+      case 'invalid-email':
+        return 'L’adresse email est invalide.';
+
+      case 'user-not-found':
+        return 'Aucun compte trouvé avec cette adresse email.';
+
+      case 'wrong-password':
+        return 'Le mot de passe est incorrect.';
+
+      case 'invalid-credential':
+        return 'Email ou mot de passe incorrect.';
+
+      case 'email-already-in-use':
+        return 'Cette adresse email est déjà utilisée.';
+
+      case 'weak-password':
+        return 'Le mot de passe est trop faible.';
+
+      case 'too-many-requests':
+        return 'Trop de tentatives. Veuillez réessayer plus tard.';
+
+      case 'network-request-failed':
+        return 'Vérifiez votre connexion Internet.';
+
+      default:
+        return 'Une erreur est survenue : ${erreur.message ?? erreur.code}';
+    }
+  }
+
+  // CONNEXION
+
+  Future<void> seConnecter() async {
+    try {
+      await FirebaseAuth.instance.signInWithEmailAndPassword(
+        email: emailController.text.trim(),
+        password: motDePasseController.text,
+      );
+
+      // Aucun Navigator ici.
+
+      // AuthGate dans main.dart détecte automatiquement
+      // l'utilisateur connecté.
+    } on FirebaseAuthException catch (e) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(messageErreurFirebase(e))));
+
+      rethrow;
+    }
+  }
+
+  // INSCRIPTION
+
+  Future<void> sinscrire() async {
+    final nom = nomController.text.trim();
+
+    final email = emailController.text.trim();
+
+    try {
+      // Création du compte Firebase
+      final credential = await FirebaseAuth.instance
+          .createUserWithEmailAndPassword(
+            email: email,
+            password: motDePasseController.text,
+          );
+
+      final utilisateur = credential.user;
+
+      if (utilisateur == null) {
+        throw Exception('Impossible de créer le compte.');
+      }
+
+      // ENREGISTRER LE NOM DANS FIREBASE AUTH
+
+      await utilisateur.updateDisplayName(nom);
+
+      // Recharge l'utilisateur pour récupérer le nouveau nom.
+      await utilisateur.reload();
+
+      // CRÉER LE DOCUMENT DE L'UTILISATEUR DANS FIRESTORE
+
+      await FirebaseFirestore.instance
+          .collection('users')
+          .doc(utilisateur.uid)
+          .set({
+            'nom': nom,
+            'email': email,
+            'conditionsAcceptees': true,
+            'dateCreation': FieldValue.serverTimestamp(),
+          }, SetOptions(merge: true));
+
+      // Aucun Navigator ici.
+      // AuthGate prendra automatiquement le relais.
+    } on FirebaseAuthException catch (e) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(messageErreurFirebase(e))));
+
+      rethrow;
+    }
+  }
+
+  // AUTHENTIFICATION
+
+  Future<void> authentifier() async {
+    // Vérifier tous les champs.
+    if (!formKey.currentState!.validate()) {
+      return;
+    }
+
+    // Conditions obligatoires uniquement lors de l'inscription.
+    if (!connexion && !accepterConditions) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Vous devez accepter les conditions d’utilisation.'),
+        ),
+      );
+
+      return;
+    }
+
+    if (chargement) return;
+
+    // Démarrer le chargement.
+    setState(() {
+      chargement = true;
+    });
+
+    try {
+      if (connexion) {
+        await seConnecter();
+      } else {
+        await sinscrire();
+      }
+    } catch (_) {
+      // Les messages sont déjà affichés
+      // dans seConnecter() ou sinscrire().
+    } finally {
+      if (!mounted) return;
+
+      setState(() {
+        chargement = false;
+      });
+    }
+  }
+
+  // DÉCORATION DES CHAMPS
+
+  InputDecoration decorationChamp({
     required String label,
     required IconData icon,
+    Widget? suffixIcon,
   }) {
     return InputDecoration(
       labelText: label,
-      prefixIcon: Icon(
-        icon,
-        color: const Color(0xFF15576B),
-      ),
-      border: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(14),
-      ),
-      focusedBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(14),
-        borderSide: const BorderSide(
-          color: Color(0xFF15576B),
-          width: 2,
-        ),
-      ),
+      prefixIcon: Icon(icon, color: couleurPrincipale),
+      suffixIcon: suffixIcon,
     );
   }
+
+  // INTERFACE
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFFF5F6F8),
+
       body: SafeArea(
         child: Center(
           child: SingleChildScrollView(
             padding: const EdgeInsets.all(24),
-            child: Container(
-              constraints: const BoxConstraints(
-                maxWidth: 450,
-              ),
+
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 450),
+
               child: Form(
                 key: formKey,
+
                 child: Column(
-                  crossAxisAlignment:
-                      CrossAxisAlignment.stretch,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+
                   children: [
-                    /// LOGO
+                    // LOGO
                     Center(
                       child: Image.asset(
                         'assets/images/logo.png',
-                        height: 100,
-                        errorBuilder:
-                            (context, error, stackTrace) {
+                        height: 105,
+
+                        // Si le logo rencontre un problème,
+                        // l'application ne plante pas.
+                        errorBuilder: (context, error, stackTrace) {
                           return const Icon(
                             Icons.inventory_2_rounded,
-                            size: 85,
-                            color: Color(0xFF15576B),
+                            size: 90,
+                            color: couleurPrincipale,
                           );
                         },
                       ),
@@ -214,51 +289,53 @@ class _AuthentificationPageState
 
                     const SizedBox(height: 25),
 
+                    // SALUTATION
                     Text(
-                      estConnexion
-                          ? '${salutation()} !'
-                          : 'Créer un compte',
+                      connexion ? '${salutation()} !' : 'Créer un compte',
                       textAlign: TextAlign.center,
                       style: const TextStyle(
-                        fontSize: 27,
+                        fontSize: 28,
                         fontWeight: FontWeight.bold,
-                        color: Color(0xFF15576B),
+                        color: couleurPrincipale,
                       ),
                     ),
 
                     const SizedBox(height: 8),
 
                     Text(
-                      estConnexion
-                          ? 'Connectez-vous à SmartInventory'
-                          : 'Inscrivez-vous pour utiliser SmartInventory',
+                      connexion
+                          ? 'Bienvenue dans SmartInventory'
+                          : 'Inscrivez-vous pour commencer à gérer votre stock',
                       textAlign: TextAlign.center,
-                      style: const TextStyle(
-                        color: Colors.grey,
-                        fontSize: 15,
-                      ),
+                      style: const TextStyle(fontSize: 15, color: Colors.grey),
                     ),
 
                     const SizedBox(height: 35),
 
-                    /// NOM
-                    if (!estConnexion) ...[
+                    // NOM COMPLET
+                    // Visible seulement à l'inscription
+                    if (!connexion) ...[
                       TextFormField(
                         controller: nomController,
-                        textCapitalization:
-                            TextCapitalization.words,
-                        decoration: decoration(
+                        textCapitalization: TextCapitalization.words,
+                        textInputAction: TextInputAction.next,
+                        decoration: decorationChamp(
                           label: 'Nom complet',
                           icon: Icons.person_outline,
                         ),
                         validator: (value) {
-                          if (value == null ||
-                              value.trim().isEmpty) {
+                          final nom = value?.trim() ?? '';
+
+                          if (nom.isEmpty) {
                             return 'Le nom est obligatoire';
                           }
 
-                          if (value.trim().length < 3) {
+                          if (nom.length < 3) {
                             return 'Le nom doit contenir au moins 3 caractères';
+                          }
+
+                          if (nom.length > 50) {
+                            return 'Le nom est trop long';
                           }
 
                           return null;
@@ -268,22 +345,28 @@ class _AuthentificationPageState
                       const SizedBox(height: 18),
                     ],
 
-                    /// EMAIL
+                    // EMAIL
                     TextFormField(
                       controller: emailController,
-                      keyboardType:
-                          TextInputType.emailAddress,
-                      decoration: decoration(
+                      keyboardType: TextInputType.emailAddress,
+                      textInputAction: TextInputAction.next,
+                      autofillHints: const [AutofillHints.email],
+                      decoration: decorationChamp(
                         label: 'Adresse email',
                         icon: Icons.email_outlined,
                       ),
                       validator: (value) {
-                        if (value == null ||
-                            value.trim().isEmpty) {
+                        final email = value?.trim() ?? '';
+
+                        if (email.isEmpty) {
                           return 'L’adresse email est obligatoire';
                         }
 
-                        if (!value.contains('@')) {
+                        final emailRegExp = RegExp(
+                          r'^[^@\s]+@[^@\s]+\.[^@\s]+$',
+                        );
+
+                        if (!emailRegExp.hasMatch(email)) {
                           return 'Veuillez saisir une adresse email valide';
                         }
 
@@ -293,86 +376,123 @@ class _AuthentificationPageState
 
                     const SizedBox(height: 18),
 
-                    /// MOT DE PASSE
+                    // MOT DE PASSE
                     TextFormField(
                       controller: motDePasseController,
-                      obscureText: true,
-                      decoration: decoration(
+                      obscureText: masquerMotDePasse,
+                      textInputAction: connexion
+                          ? TextInputAction.done
+                          : TextInputAction.next,
+                      autofillHints: [
+                        connexion
+                            ? AutofillHints.password
+                            : AutofillHints.newPassword,
+                      ],
+                      decoration: decorationChamp(
                         label: 'Mot de passe',
                         icon: Icons.lock_outline,
+                        suffixIcon: IconButton(
+                          onPressed: () {
+                            setState(() {
+                              masquerMotDePasse = !masquerMotDePasse;
+                            });
+                          },
+                          icon: Icon(
+                            masquerMotDePasse
+                                ? Icons.visibility_outlined
+                                : Icons.visibility_off_outlined,
+                          ),
+                        ),
                       ),
                       validator: (value) {
-                        if (value == null ||
-                            value.isEmpty) {
+                        if (value == null || value.isEmpty) {
                           return 'Le mot de passe est obligatoire';
                         }
 
                         if (value.length < 6) {
-                          return 'Minimum 6 caractères';
+                          return 'Le mot de passe doit contenir au moins 6 caractères';
                         }
 
                         return null;
                       },
+                      onFieldSubmitted: connexion
+                          ? (_) {
+                              authentifier();
+                            }
+                          : null,
                     ),
 
-                    /// CONFIRMATION
-                    if (!estConnexion) ...[
+                    // CONFIRMATION MOT DE PASSE
+                    if (!connexion) ...[
                       const SizedBox(height: 18),
 
                       TextFormField(
                         controller: confirmationController,
-                        obscureText: true,
-                        decoration: decoration(
+                        obscureText: masquerConfirmation,
+                        textInputAction: TextInputAction.done,
+                        decoration: decorationChamp(
                           label: 'Confirmer le mot de passe',
                           icon: Icons.lock_reset_outlined,
+                          suffixIcon: IconButton(
+                            onPressed: () {
+                              setState(() {
+                                masquerConfirmation = !masquerConfirmation;
+                              });
+                            },
+                            icon: Icon(
+                              masquerConfirmation
+                                  ? Icons.visibility_outlined
+                                  : Icons.visibility_off_outlined,
+                            ),
+                          ),
                         ),
                         validator: (value) {
-                          if (value == null ||
-                              value.isEmpty) {
-                            return 'Veuillez confirmer votre mot de passe';
+                          if (value == null || value.isEmpty) {
+                            return 'Veuillez confirmer le mot de passe';
                           }
 
-                          if (value !=
-                              motDePasseController.text) {
+                          if (value != motDePasseController.text) {
                             return 'Les mots de passe ne correspondent pas';
                           }
 
                           return null;
                         },
+                        onFieldSubmitted: (_) {
+                          authentifier();
+                        },
                       ),
 
-                      const SizedBox(height: 12),
+                      const SizedBox(height: 10),
 
-                      /// CONDITIONS
+                      // CONDITIONS D'UTILISATION
                       Row(
-                        crossAxisAlignment:
-                            CrossAxisAlignment.center,
+                        crossAxisAlignment: CrossAxisAlignment.center,
                         children: [
                           Checkbox(
                             value: accepterConditions,
-                            activeColor:
-                                const Color(0xFF15576B),
-                            onChanged: (value) {
-                              setState(() {
-                                accepterConditions =
-                                    value ?? false;
-                              });
-                            },
+                            activeColor: couleurPrincipale,
+                            onChanged: chargement
+                                ? null
+                                : (value) {
+                                    setState(() {
+                                      accepterConditions = value ?? false;
+                                    });
+                                  },
                           ),
 
                           Expanded(
                             child: GestureDetector(
-                              onTap: () {
-                                setState(() {
-                                  accepterConditions =
-                                      !accepterConditions;
-                                });
-                              },
+                              onTap: chargement
+                                  ? null
+                                  : () {
+                                      setState(() {
+                                        accepterConditions =
+                                            !accepterConditions;
+                                      });
+                                    },
                               child: const Text(
-                                'J’accepte les conditions d’utilisation.',
-                                style: TextStyle(
-                                  fontSize: 13,
-                                ),
+                                'J’accepte les conditions d’utilisation de SmartInventory.',
+                                style: TextStyle(fontSize: 13),
                               ),
                             ),
                           ),
@@ -382,65 +502,53 @@ class _AuthentificationPageState
 
                     const SizedBox(height: 25),
 
-                    /// BOUTON
+                    // BOUTON
                     SizedBox(
                       height: 55,
+
                       child: ElevatedButton(
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor:
-                              const Color(0xFF15576B),
-                          foregroundColor: Colors.white,
-                          shape: RoundedRectangleBorder(
-                            borderRadius:
-                                BorderRadius.circular(14),
-                          ),
-                        ),
-                        onPressed:
-                            chargement ? null : authentifier,
+                        onPressed: chargement ? null : authentifier,
+
                         child: chargement
                             ? const SizedBox(
-                                width: 25,
-                                height: 25,
-                                child:
-                                    CircularProgressIndicator(
+                                width: 24,
+                                height: 24,
+                                child: CircularProgressIndicator(
                                   color: Colors.white,
                                   strokeWidth: 2,
                                 ),
                               )
                             : Text(
-                                estConnexion
-                                    ? 'Se connecter'
-                                    : 'Créer mon compte',
+                                connexion ? 'Se connecter' : 'Créer mon compte',
                                 style: const TextStyle(
                                   fontSize: 16,
-                                  fontWeight:
-                                      FontWeight.bold,
+                                  fontWeight: FontWeight.bold,
                                 ),
                               ),
                       ),
                     ),
 
-                    const SizedBox(height: 18),
+                    const SizedBox(height: 20),
 
-                    /// CHANGER CONNEXION / INSCRIPTION
+                    // CONNEXION / INSCRIPTION
                     Row(
-                      mainAxisAlignment:
-                          MainAxisAlignment.center,
+                      mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        Text(
-                          estConnexion
-                              ? 'Vous n’avez pas de compte ? '
-                              : 'Vous avez déjà un compte ? ',
-                        ),
-                        TextButton(
-                          onPressed:
-                              chargement ? null : changerMode,
+                        Flexible(
                           child: Text(
-                            estConnexion
-                                ? 'S’inscrire'
-                                : 'Se connecter',
+                            connexion
+                                ? 'Vous n’avez pas de compte ?'
+                                : 'Vous avez déjà un compte ?',
+                            textAlign: TextAlign.center,
+                          ),
+                        ),
+
+                        TextButton(
+                          onPressed: chargement ? null : changerMode,
+                          child: Text(
+                            connexion ? 'S’inscrire' : 'Se connecter',
                             style: const TextStyle(
-                              color: Color(0xFF15576B),
+                              color: couleurPrincipale,
                               fontWeight: FontWeight.bold,
                             ),
                           ),

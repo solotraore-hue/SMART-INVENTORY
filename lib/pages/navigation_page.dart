@@ -1,11 +1,10 @@
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
 import 'accueil_page.dart';
-import 'approvisionnement_page.dart';
-import 'fournisseurs_page.dart';
 import 'produits_page.dart';
 import 'ventes_page.dart';
+import 'approvisionnement_page.dart';
+import 'fournisseurs_page.dart';
 
 class NavigationPage extends StatefulWidget {
   const NavigationPage({super.key});
@@ -15,136 +14,113 @@ class NavigationPage extends StatefulWidget {
 }
 
 class _NavigationPageState extends State<NavigationPage> {
+  // COULEURS
+
+  static const Color couleurPrincipale = Color(0xFF15576B);
+
+  static const Color couleurSelection = Color(0xFFE0F2EE);
+
+  // PAGE SÉLECTIONNÉE
+
   int indexSelectionne = 0;
 
-  final List<Widget> pages = const [
-    AccueilPage(),
-    ProduitsPage(),
-    VentesPage(),
-    ApprovisionnementPage(),
-    FournisseursPage(),
-  ];
+  // AFFICHER LA PAGE CORRESPONDANTE
 
-  Future<void> deconnexion() async {
-    final confirmation = await showDialog<bool>(
-      context: context,
-      builder: (dialogContext) {
-        return AlertDialog(
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(20),
-          ),
-          title: const Row(
-            children: [
-              Icon(
-                Icons.logout,
-                color: Color(0xFF15576B),
-              ),
-              SizedBox(width: 10),
-              Text('Déconnexion'),
-            ],
-          ),
-          content: const Text(
-            'Voulez-vous vraiment vous déconnecter de SmartInventory ?',
-          ),
-          actions: [
-            TextButton(
-              onPressed: () {
-                Navigator.pop(dialogContext, false);
-              },
-              child: const Text(
-                'Annuler',
-              ),
-            ),
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF15576B),
-                foregroundColor: Colors.white,
-              ),
-              onPressed: () {
-                Navigator.pop(dialogContext, true);
-              },
-              child: const Text(
-                'Se déconnecter',
-              ),
-            ),
-          ],
-        );
-      },
-    );
+  Widget afficherPage() {
+    switch (indexSelectionne) {
+      case 0:
+        return const AccueilPage();
 
-    if (confirmation != true) return;
+      case 1:
+        return const ProduitsPage();
 
-    try {
-      await FirebaseAuth.instance.signOut();
-    } catch (e) {
-      if (!mounted) return;
+      case 2:
+        return const VentesPage();
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            'Impossible de vous déconnecter pour le moment.',
-          ),
-        ),
-      );
+      case 3:
+        return const ApprovisionnementPage();
+
+      case 4:
+        return const FournisseursPage();
+
+      default:
+        return const AccueilPage();
     }
   }
+
+  // CHANGER DE PAGE
+
+  void changerPage(int nouvelIndex) {
+    if (nouvelIndex == indexSelectionne) {
+      return;
+    }
+
+    setState(() {
+      indexSelectionne = nouvelIndex;
+    });
+  }
+
+  // INTERFACE
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: IndexedStack(
-        index: indexSelectionne,
-        children: pages,
-      ),
+      backgroundColor: const Color(0xFFF5F6F8),
 
+      // Une seule page est présente à la fois.
+      body: afficherPage(),
+
+      // NAVIGATION DU BAS
       bottomNavigationBar: NavigationBar(
-        height: 72,
-        backgroundColor: Colors.white,
         selectedIndex: indexSelectionne,
-        indicatorColor: const Color(0xFFE0F2EE),
-        onDestinationSelected: (index) {
-          setState(() {
-            indexSelectionne = index;
-          });
-        },
+
+        onDestinationSelected: changerPage,
+
+        height: 75,
+
+        backgroundColor: Colors.white,
+
+        indicatorColor: couleurSelection,
+
+        labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
+
         destinations: const [
+          // ACCUEIL
           NavigationDestination(
             icon: Icon(Icons.home_outlined),
-            selectedIcon: Icon(Icons.home),
+            selectedIcon: Icon(Icons.home, color: couleurPrincipale),
             label: 'Accueil',
           ),
+
+          // PRODUITS
           NavigationDestination(
             icon: Icon(Icons.inventory_2_outlined),
-            selectedIcon: Icon(Icons.inventory_2),
+            selectedIcon: Icon(Icons.inventory_2, color: couleurPrincipale),
             label: 'Produits',
           ),
+
+          // VENTES
           NavigationDestination(
             icon: Icon(Icons.shopping_cart_outlined),
-            selectedIcon: Icon(Icons.shopping_cart),
+            selectedIcon: Icon(Icons.shopping_cart, color: couleurPrincipale),
             label: 'Ventes',
           ),
+
+          // APPROVISIONNEMENT
           NavigationDestination(
             icon: Icon(Icons.local_shipping_outlined),
-            selectedIcon: Icon(Icons.local_shipping),
+            selectedIcon: Icon(Icons.local_shipping, color: couleurPrincipale),
             label: 'Appro.',
           ),
+
+          // FOURNISSEURS
           NavigationDestination(
             icon: Icon(Icons.people_outline),
-            selectedIcon: Icon(Icons.people),
+            selectedIcon: Icon(Icons.people, color: couleurPrincipale),
             label: 'Fournisseurs',
           ),
         ],
       ),
-
-      floatingActionButton: indexSelectionne == 0
-          ? FloatingActionButton(
-              backgroundColor: const Color(0xFF15576B),
-              foregroundColor: Colors.white,
-              tooltip: 'Déconnexion',
-              onPressed: deconnexion,
-              child: const Icon(Icons.logout),
-            )
-          : null,
     );
   }
 }

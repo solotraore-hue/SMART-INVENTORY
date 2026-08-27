@@ -2,6 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 
 import '../services/firestore_service.dart';
+import 'fournisseur_form_page.dart';
 
 class FournisseursPage extends StatefulWidget {
   const FournisseursPage({super.key});
@@ -11,440 +12,163 @@ class FournisseursPage extends StatefulWidget {
 }
 
 class _FournisseursPageState extends State<FournisseursPage> {
-  final FirestoreService firestoreService = FirestoreService();
+  // COULEURS
 
   static const Color couleurPrincipale = Color(0xFF15576B);
+  static const Color couleurClaire = Color(0xFFE0F2EE);
 
-  // ============================================================
-  // AJOUTER OU MODIFIER UN FOURNISSEUR
-  // ============================================================
+  // FIRESTORE
 
-  Future<void> afficherFormulaire({
+  final FirestoreService firestoreService = FirestoreService();
+
+  // OUVRIR AJOUT / MODIFICATION
+
+  Future<void> ouvrirFormulaire({
     String? fournisseurId,
     Map<String, dynamic>? fournisseur,
   }) async {
-    final formKey = GlobalKey<FormState>();
-
-    final nomController = TextEditingController(
-      text: fournisseur?['nom']?.toString() ?? '',
+    final resultat = await Navigator.of(context).push<bool>(
+      MaterialPageRoute(
+        builder: (_) => FournisseurFormPage(
+          fournisseurId: fournisseurId,
+          fournisseur: fournisseur,
+        ),
+      ),
     );
 
-    final telephoneController = TextEditingController(
-      text: fournisseur?['telephone']?.toString() ?? '',
-    );
+    if (!mounted) {
+      return;
+    }
 
-    final produitController = TextEditingController(
-      text: fournisseur?['produit']?.toString() ?? '',
-    );
-
-    final adresseController = TextEditingController(
-      text: fournisseur?['adresse']?.toString() ?? '',
-    );
-
-    final bool modification = fournisseurId != null;
-
-    try {
-      final resultat = await showModalBottomSheet<bool>(
-        context: context,
-        useRootNavigator: true,
-        isScrollControlled: true,
-        backgroundColor: Colors.transparent,
-        builder: (sheetContext) {
-          return Padding(
-            padding: EdgeInsets.only(
-              bottom: MediaQuery.of(sheetContext).viewInsets.bottom,
-            ),
-            child: SafeArea(
-              top: false,
-              child: Container(
-                padding: const EdgeInsets.fromLTRB(24, 16, 24, 24),
-                decoration: const BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
-                ),
-                child: SingleChildScrollView(
-                  child: Form(
-                    key: formKey,
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        // Barre du BottomSheet
-                        Container(
-                          width: 45,
-                          height: 5,
-                          decoration: BoxDecoration(
-                            color: Colors.grey.shade300,
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                        ),
-
-                        const SizedBox(height: 20),
-
-                        Text(
-                          modification
-                              ? 'Modifier le fournisseur'
-                              : 'Nouveau fournisseur',
-                          style: const TextStyle(
-                            fontSize: 22,
-                            fontWeight: FontWeight.bold,
-                            color: couleurPrincipale,
-                          ),
-                        ),
-
-                        const SizedBox(height: 25),
-
-                        // ==================================================
-                        // NOM
-                        // ==================================================
-                        TextFormField(
-                          controller: nomController,
-                          textCapitalization: TextCapitalization.words,
-                          decoration: InputDecoration(
-                            labelText: 'Nom du fournisseur',
-                            prefixIcon: const Icon(
-                              Icons.person_outline,
-                              color: couleurPrincipale,
-                            ),
-                            border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(14),
-                            ),
-                            enabledBorder: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(14),
-                              borderSide: BorderSide(
-                                color: Colors.grey.shade300,
-                              ),
-                            ),
-                          ),
-                          validator: (value) {
-                            final nom = value?.trim() ?? '';
-
-                            if (nom.isEmpty) {
-                              return 'Le nom est obligatoire';
-                            }
-
-                            if (nom.length < 3 || nom.length > 20) {
-                              return 'Le nom doit contenir entre 3 et 20 caractères';
-                            }
-
-                            return null;
-                          },
-                        ),
-
-                        const SizedBox(height: 16),
-
-                        // ==================================================
-                        // TELEPHONE
-                        // ==================================================
-                        TextFormField(
-                          controller: telephoneController,
-                          keyboardType: TextInputType.phone,
-                          maxLength: 8,
-                          decoration: InputDecoration(
-                            labelText: 'Téléphone',
-                            counterText: '',
-                            prefixIcon: const Icon(
-                              Icons.phone_outlined,
-                              color: couleurPrincipale,
-                            ),
-                            border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(14),
-                            ),
-                            enabledBorder: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(14),
-                              borderSide: BorderSide(
-                                color: Colors.grey.shade300,
-                              ),
-                            ),
-                          ),
-                          validator: (value) {
-                            final telephone = value?.trim() ?? '';
-
-                            if (telephone.isEmpty) {
-                              return 'Le téléphone est obligatoire';
-                            }
-
-                            if (!RegExp(r'^\d{8}$').hasMatch(telephone)) {
-                              return 'Le téléphone doit contenir exactement 8 chiffres';
-                            }
-
-                            return null;
-                          },
-                        ),
-
-                        const SizedBox(height: 16),
-
-                        // ==================================================
-                        // PRODUIT FOURNI
-                        // ==================================================
-                        TextFormField(
-                          controller: produitController,
-                          textCapitalization: TextCapitalization.words,
-                          decoration: InputDecoration(
-                            labelText: 'Produit fourni',
-                            prefixIcon: const Icon(
-                              Icons.inventory_2_outlined,
-                              color: couleurPrincipale,
-                            ),
-                            border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(14),
-                            ),
-                            enabledBorder: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(14),
-                              borderSide: BorderSide(
-                                color: Colors.grey.shade300,
-                              ),
-                            ),
-                          ),
-                          validator: (value) {
-                            if (value == null || value.trim().isEmpty) {
-                              return 'Le produit est obligatoire';
-                            }
-
-                            return null;
-                          },
-                        ),
-
-                        const SizedBox(height: 16),
-
-                        // ==================================================
-                        // ADRESSE
-                        // ==================================================
-                        TextFormField(
-                          controller: adresseController,
-                          maxLines: 3,
-                          textCapitalization: TextCapitalization.sentences,
-                          decoration: InputDecoration(
-                            labelText: 'Adresse',
-                            alignLabelWithHint: true,
-                            prefixIcon: const Padding(
-                              padding: EdgeInsets.only(bottom: 45),
-                              child: Icon(
-                                Icons.location_on_outlined,
-                                color: couleurPrincipale,
-                              ),
-                            ),
-                            border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(14),
-                            ),
-                            enabledBorder: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(14),
-                              borderSide: BorderSide(
-                                color: Colors.grey.shade300,
-                              ),
-                            ),
-                          ),
-                          validator: (value) {
-                            final adresse = value?.trim() ?? '';
-
-                            if (adresse.isEmpty) {
-                              return 'L’adresse est obligatoire';
-                            }
-
-                            if (adresse.length < 3) {
-                              return 'L’adresse doit contenir au moins 3 caractères';
-                            }
-
-                            return null;
-                          },
-                        ),
-
-                        const SizedBox(height: 25),
-
-                        // ==================================================
-                        // BOUTON AJOUTER / MODIFIER
-                        // ==================================================
-                        SizedBox(
-                          width: double.infinity,
-                          height: 55,
-                          child: ElevatedButton.icon(
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: couleurPrincipale,
-                              foregroundColor: Colors.white,
-                              elevation: 0,
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(14),
-                              ),
-                            ),
-                            onPressed: () async {
-                              if (!formKey.currentState!.validate()) {
-                                return;
-                              }
-
-                              final donnees = <String, dynamic>{
-                                'nom': nomController.text.trim(),
-                                'telephone': telephoneController.text.trim(),
-                                'produit': produitController.text.trim(),
-                                'adresse': adresseController.text.trim(),
-                              };
-
-                              try {
-                                // ==========================================
-                                // MODIFICATION
-                                // ==========================================
-
-                                if (modification) {
-                                  await firestoreService.fournisseurs
-                                      .doc(fournisseurId)
-                                      .update({
-                                        ...donnees,
-                                        'dateModification':
-                                            FieldValue.serverTimestamp(),
-                                      });
-
-                                  // Mettre à jour les activités liées
-                                  final activitesSnapshot =
-                                      await firestoreService.activites
-                                          .where(
-                                            'fournisseurId',
-                                            isEqualTo: fournisseurId,
-                                          )
-                                          .get();
-
-                                  final batch = FirebaseFirestore.instance
-                                      .batch();
-
-                                  for (final activite
-                                      in activitesSnapshot.docs) {
-                                    batch.update(activite.reference, {
-                                      'description':
-                                          '${donnees['nom']} fournit ${donnees['produit']}',
-                                    });
-                                  }
-
-                                  if (activitesSnapshot.docs.isNotEmpty) {
-                                    await batch.commit();
-                                  }
-                                }
-                                // ==========================================
-                                // AJOUT
-                                // ==========================================
-                                else {
-                                  final fournisseurReference = firestoreService
-                                      .fournisseurs
-                                      .doc();
-
-                                  final activiteReference = firestoreService
-                                      .activites
-                                      .doc();
-
-                                  final batch = FirebaseFirestore.instance
-                                      .batch();
-
-                                  // Enregistrer le fournisseur
-                                  batch.set(fournisseurReference, {
-                                    ...donnees,
-                                    'dateCreation':
-                                        FieldValue.serverTimestamp(),
-                                  });
-
-                                  // Enregistrer l'activité
-                                  batch.set(activiteReference, {
-                                    'titre': 'Nouveau fournisseur ajouté',
-                                    'description':
-                                        '${donnees['nom']} fournit ${donnees['produit']}',
-                                    'type': 'fournisseur',
-                                    'fournisseurId': fournisseurReference.id,
-                                    'date': FieldValue.serverTimestamp(),
-                                  });
-
-                                  await batch.commit();
-                                }
-
-                                // Vérification importante
-                                if (!sheetContext.mounted) return;
-
-                                // Le BottomSheet retourne uniquement true.
-                                // Aucun SnackBar n'est affiché ici.
-                                Navigator.of(
-                                  sheetContext,
-                                  rootNavigator: true,
-                                ).pop(true);
-                              } catch (e) {
-                                if (!sheetContext.mounted) return;
-
-                                ScaffoldMessenger.of(sheetContext).showSnackBar(
-                                  const SnackBar(
-                                    content: Text(
-                                      'Une erreur est survenue. Veuillez réessayer.',
-                                    ),
-                                  ),
-                                );
-                              }
-                            },
-                            icon: Icon(
-                              modification ? Icons.edit_outlined : Icons.add,
-                            ),
-                            label: Text(
-                              modification
-                                  ? 'Enregistrer les modifications'
-                                  : 'Ajouter le fournisseur',
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          );
-        },
-      );
-
-      // On revient ici uniquement après la fermeture du BottomSheet.
-      if (!mounted) return;
-
-      if (resultat == true) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              modification
-                  ? 'Fournisseur modifié avec succès.'
-                  : 'Fournisseur ajouté avec succès.',
-            ),
+    if (resultat == true) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            fournisseurId == null
+                ? 'Fournisseur ajouté avec succès.'
+                : 'Fournisseur modifié avec succès.',
           ),
-        );
-      }
-    } finally {
-      // Libération propre des controllers
-      nomController.dispose();
-      telephoneController.dispose();
-      produitController.dispose();
-      adresseController.dispose();
+        ),
+      );
     }
   }
 
-  // ============================================================
-  // SUPPRIMER UN FOURNISSEUR
-  // ============================================================
+  // ACTIONS DES TROIS POINTS
 
-  Future<void> supprimerFournisseur(String fournisseurId) async {
-    final confirmation = await showDialog<bool>(
+  Future<void> ouvrirActions({
+    required String fournisseurId,
+    required Map<String, dynamic> fournisseur,
+  }) async {
+    final action = await showDialog<String>(
       context: context,
-      useRootNavigator: true,
+
       builder: (dialogContext) {
         return AlertDialog(
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(20),
+            borderRadius: BorderRadius.circular(18),
           ),
-          title: const Text('Supprimer le fournisseur'),
-          content: const Text(
-            'Voulez-vous vraiment supprimer ce fournisseur ?',
+
+          title: const Text(
+            'Actions',
+            style: TextStyle(
+              color: couleurPrincipale,
+              fontWeight: FontWeight.bold,
+            ),
           ),
+
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+
+            children: [
+              // MODIFIER
+              ListTile(
+                leading: const Icon(
+                  Icons.edit_outlined,
+                  color: couleurPrincipale,
+                ),
+                title: const Text('Modifier'),
+                onTap: () {
+                  Navigator.of(dialogContext).pop('modifier');
+                },
+              ),
+
+              // SUPPRIMER
+              ListTile(
+                leading: const Icon(Icons.delete_outline, color: Colors.red),
+                title: const Text('Supprimer'),
+                onTap: () {
+                  Navigator.of(dialogContext).pop('supprimer');
+                },
+              ),
+            ],
+          ),
+        );
+      },
+    );
+
+    if (!mounted || action == null) {
+      return;
+    }
+
+    if (action == 'modifier') {
+      await ouvrirFormulaire(
+        fournisseurId: fournisseurId,
+        fournisseur: fournisseur,
+      );
+    }
+
+    if (action == 'supprimer') {
+      await supprimerFournisseur(
+        fournisseurId: fournisseurId,
+        fournisseur: fournisseur,
+      );
+    }
+  }
+
+  // SUPPRIMER UN FOURNISSEUR
+
+  Future<void> supprimerFournisseur({
+    required String fournisseurId,
+    required Map<String, dynamic> fournisseur,
+  }) async {
+    final nom = fournisseur['nom']?.toString() ?? 'ce fournisseur';
+
+    // CONFIRMATION
+
+    final confirmation = await showDialog<bool>(
+      context: context,
+
+      builder: (dialogContext) {
+        return AlertDialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(18),
+          ),
+
+          title: const Text(
+            'Supprimer le fournisseur',
+            style: TextStyle(
+              color: couleurPrincipale,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+
+          content: Text('Voulez-vous vraiment supprimer "$nom" ?'),
+
           actions: [
             TextButton(
               onPressed: () {
-                Navigator.of(dialogContext, rootNavigator: true).pop(false);
+                Navigator.of(dialogContext).pop(false);
               },
               child: const Text('Annuler'),
             ),
+
             ElevatedButton(
               style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.red,
                 foregroundColor: Colors.white,
               ),
               onPressed: () {
-                Navigator.of(dialogContext, rootNavigator: true).pop(true);
+                Navigator.of(dialogContext).pop(true);
               },
               child: const Text('Supprimer'),
             ),
@@ -453,338 +177,438 @@ class _FournisseursPageState extends State<FournisseursPage> {
       },
     );
 
-    if (!mounted) return;
-
-    if (confirmation != true) return;
+    if (!mounted || confirmation != true) {
+      return;
+    }
 
     try {
-      // Chercher les activités associées au fournisseur
+      // RÉCUPÉRER LES ACTIVITÉS DE CE FOURNISSEUR
+
       final activitesSnapshot = await firestoreService.activites
           .where('fournisseurId', isEqualTo: fournisseurId)
           .get();
 
-      if (!mounted) return;
-
       final batch = FirebaseFirestore.instance.batch();
 
-      // Supprimer le fournisseur
+      // SUPPRIMER LE FOURNISSEUR
+
       batch.delete(firestoreService.fournisseurs.doc(fournisseurId));
 
-      // Supprimer automatiquement les activités associées
+      // SUPPRIMER SES ACTIVITÉS RÉCENTES
+
       for (final activite in activitesSnapshot.docs) {
         batch.delete(activite.reference);
       }
 
       await batch.commit();
 
-      if (!mounted) return;
+      if (!mounted) {
+        return;
+      }
 
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Fournisseur supprimé avec succès.')),
       );
-    } catch (e) {
-      if (!mounted) return;
+    } on FirebaseException catch (e) {
+      if (!mounted) {
+        return;
+      }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(e.message ?? 'Impossible de supprimer le fournisseur.'),
+        ),
+      );
+    } catch (_) {
+      if (!mounted) {
+        return;
+      }
 
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Impossible de supprimer ce fournisseur.'),
+          content: Text('Une erreur est survenue pendant la suppression.'),
         ),
       );
     }
   }
 
-  // ============================================================
-  // INTERFACE PRINCIPALE
-  // ============================================================
+  // CARTE TOTAL FOURNISSEURS
+
+  Widget carteTotalFournisseurs(int totalFournisseurs) {
+    return Container(
+      width: double.infinity,
+
+      margin: const EdgeInsets.fromLTRB(16, 16, 16, 6),
+
+      padding: const EdgeInsets.all(20),
+
+      decoration: BoxDecoration(
+        color: couleurPrincipale,
+        borderRadius: BorderRadius.circular(20),
+      ),
+
+      child: Row(
+        children: [
+          // ICÔNE
+          Container(
+            width: 55,
+            height: 55,
+
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.15),
+              borderRadius: BorderRadius.circular(15),
+            ),
+
+            child: const Icon(
+              Icons.people_alt_outlined,
+              color: Colors.white,
+              size: 30,
+            ),
+          ),
+
+          const SizedBox(width: 16),
+
+          // TOTAL
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+
+              children: [
+                const Text(
+                  'Total fournisseurs',
+                  style: TextStyle(color: Colors.white70, fontSize: 14),
+                ),
+
+                const SizedBox(height: 5),
+
+                Text(
+                  '$totalFournisseurs',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 27,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+
+                const SizedBox(height: 2),
+
+                Text(
+                  totalFournisseurs <= 1 ? 'Fournisseur' : 'Fournisseurs',
+                  style: const TextStyle(color: Colors.white70, fontSize: 12),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // CARTE D'UN FOURNISSEUR
+
+  Widget carteFournisseur({
+    required String fournisseurId,
+    required Map<String, dynamic> fournisseur,
+  }) {
+    final nom = fournisseur['nom']?.toString() ?? 'Fournisseur';
+
+    final telephone = fournisseur['telephone']?.toString() ?? 'Non renseigné';
+
+    final produitFourni =
+        fournisseur['produitFourni']?.toString() ??
+        fournisseur['produit']?.toString() ??
+        'Non renseigné';
+
+    final adresse = fournisseur['adresse']?.toString() ?? 'Non renseignée';
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+
+      padding: const EdgeInsets.all(16),
+
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(18),
+
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.03),
+            blurRadius: 8,
+            offset: const Offset(0, 3),
+          ),
+        ],
+      ),
+
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+
+        children: [
+          // ICÔNE
+          Container(
+            width: 50,
+            height: 50,
+
+            decoration: BoxDecoration(
+              color: couleurClaire,
+              borderRadius: BorderRadius.circular(14),
+            ),
+
+            child: const Icon(
+              Icons.person_outline,
+              color: couleurPrincipale,
+              size: 27,
+            ),
+          ),
+
+          const SizedBox(width: 14),
+
+          // INFORMATIONS
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+
+              children: [
+                Text(
+                  nom,
+                  style: const TextStyle(
+                    color: couleurPrincipale,
+                    fontSize: 17,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+
+                const SizedBox(height: 9),
+
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Icon(
+                      Icons.phone_outlined,
+                      size: 17,
+                      color: Colors.grey,
+                    ),
+
+                    const SizedBox(width: 7),
+
+                    Expanded(
+                      child: Text(
+                        telephone,
+                        style: const TextStyle(fontSize: 13),
+                      ),
+                    ),
+                  ],
+                ),
+
+                const SizedBox(height: 7),
+
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Icon(
+                      Icons.inventory_2_outlined,
+                      size: 17,
+                      color: Colors.grey,
+                    ),
+
+                    const SizedBox(width: 7),
+
+                    Expanded(
+                      child: Text(
+                        'Produit fourni : $produitFourni',
+                        style: const TextStyle(fontSize: 13),
+                      ),
+                    ),
+                  ],
+                ),
+
+                const SizedBox(height: 7),
+
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Icon(
+                      Icons.location_on_outlined,
+                      size: 17,
+                      color: Colors.grey,
+                    ),
+
+                    const SizedBox(width: 7),
+
+                    Expanded(
+                      child: Text(
+                        adresse,
+                        style: const TextStyle(fontSize: 13),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+
+          // TROIS POINTS
+          IconButton(
+            tooltip: 'Actions',
+
+            icon: const Icon(Icons.more_vert, color: couleurPrincipale),
+
+            onPressed: () {
+              ouvrirActions(
+                fournisseurId: fournisseurId,
+                fournisseur: fournisseur,
+              );
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  // INTERFACE
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFFF5F6F8),
 
-      appBar: AppBar(
-        backgroundColor: couleurPrincipale,
-        foregroundColor: Colors.white,
-        elevation: 0,
-        title: const Text(
-          'Fournisseurs',
-          style: TextStyle(fontWeight: FontWeight.bold),
-        ),
-      ),
+      // APP BAR
+      appBar: AppBar(title: const Text('Fournisseurs')),
 
-      // ==========================================================
-      // BOUTON AJOUTER
-      // ==========================================================
+      // AJOUTER
       floatingActionButton: FloatingActionButton.extended(
-        backgroundColor: couleurPrincipale,
-        foregroundColor: Colors.white,
-        icon: const Icon(Icons.add),
-        label: const Text('Ajouter'),
         onPressed: () {
-          afficherFormulaire();
+          ouvrirFormulaire();
         },
+
+        icon: const Icon(Icons.person_add_alt_1),
+
+        label: const Text('Nouveau fournisseur'),
       ),
 
-      // ==========================================================
-      // LISTE DES FOURNISSEURS
-      // ==========================================================
+      // FIRESTORE
       body: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-        stream: firestoreService.fournisseurs
-            .orderBy('dateCreation', descending: true)
-            .snapshots(),
+        // Nous n'utilisons pas orderBy afin que les anciens
+        // fournisseurs soient également affichés.
+        stream: firestoreService.fournisseurs.snapshots(),
+
         builder: (context, snapshot) {
-          // Chargement
+          // CHARGEMENT
+
           if (snapshot.connectionState == ConnectionState.waiting &&
               !snapshot.hasData) {
-            return const Center(child: CircularProgressIndicator());
-          }
-
-          // Erreur
-          if (snapshot.hasError) {
             return const Center(
-              child: Text('Impossible de charger les fournisseurs.'),
+              child: CircularProgressIndicator(color: couleurPrincipale),
             );
           }
 
-          if (!snapshot.hasData) {
-            return const Center(child: CircularProgressIndicator());
-          }
+          // ERREUR
 
-          final fournisseurs = snapshot.data!.docs;
-
-          // ======================================================
-          // AUCUN FOURNISSEUR
-          // ======================================================
-
-          if (fournisseurs.isEmpty) {
-            return const Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(
-                    Icons.people_outline,
-                    size: 80,
-                    color: couleurPrincipale,
-                  ),
-
-                  SizedBox(height: 15),
-
-                  Text(
-                    'Aucun fournisseur',
-                    style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-                  ),
-
-                  SizedBox(height: 5),
-
-                  Text('Ajoutez vos fournisseurs ici.'),
-                ],
+          if (snapshot.hasError) {
+            return Center(
+              child: Padding(
+                padding: const EdgeInsets.all(25),
+                child: Text(
+                  'Impossible de charger les fournisseurs.\n'
+                  '${snapshot.error}',
+                  textAlign: TextAlign.center,
+                ),
               ),
             );
           }
 
-          // ======================================================
-          // LISTE
-          // ======================================================
+          final fournisseurs =
+              List<QueryDocumentSnapshot<Map<String, dynamic>>>.from(
+                snapshot.data?.docs ?? [],
+              );
 
-          return ListView.builder(
-            padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
-            itemCount: fournisseurs.length,
-            itemBuilder: (context, index) {
-              final document = fournisseurs[index];
+          // TRI LOCAL PAR DATE
 
-              final fournisseur = document.data();
+          fournisseurs.sort((a, b) {
+            final donneesA = a.data();
+            final donneesB = b.data();
 
-              final nom = fournisseur['nom']?.toString() ?? 'Sans nom';
+            final dateA =
+                donneesA['dateCreation'] ?? donneesA['dateModification'];
 
-              final telephone = fournisseur['telephone']?.toString() ?? '';
+            final dateB =
+                donneesB['dateCreation'] ?? donneesB['dateModification'];
 
-              final produit = fournisseur['produit']?.toString() ?? '';
+            if (dateA is Timestamp && dateB is Timestamp) {
+              return dateB.compareTo(dateA);
+            }
 
-              final adresse = fournisseur['adresse']?.toString() ?? '';
+            return 0;
+          });
 
-              return Container(
-                margin: const EdgeInsets.only(bottom: 12),
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(18),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(0.05),
-                      blurRadius: 10,
-                      offset: const Offset(0, 3),
-                    ),
-                  ],
-                ),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // ==================================================
-                    // ICONE
-                    // ==================================================
-                    Container(
-                      width: 52,
-                      height: 52,
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFE0F2EE),
-                        borderRadius: BorderRadius.circular(14),
-                      ),
-                      child: const Icon(
-                        Icons.person_outline,
-                        color: couleurPrincipale,
-                      ),
-                    ),
+          // TOTAL FOURNISSEURS
 
-                    const SizedBox(width: 14),
+          final totalFournisseurs = fournisseurs.length;
 
-                    // ==================================================
-                    // INFORMATIONS
-                    // ==================================================
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            nom,
-                            style: const TextStyle(
-                              fontSize: 17,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
+          return Column(
+            children: [
+              // TOTAL EN HAUT
+              carteTotalFournisseurs(totalFournisseurs),
 
-                          const SizedBox(height: 6),
+              const SizedBox(height: 8),
 
-                          Row(
-                            children: [
-                              const Icon(
-                                Icons.phone_outlined,
-                                size: 16,
-                                color: Colors.grey,
-                              ),
-                              const SizedBox(width: 5),
-                              Expanded(
-                                child: Text(
-                                  telephone,
-                                  style: const TextStyle(color: Colors.grey),
-                                ),
-                              ),
-                            ],
-                          ),
+              // LISTE
+              Expanded(
+                child: fournisseurs.isEmpty
+                    ? const Center(
+                        child: Padding(
+                          padding: EdgeInsets.all(30),
 
-                          const SizedBox(height: 5),
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
 
-                          Row(
-                            children: [
-                              const Icon(
-                                Icons.inventory_2_outlined,
-                                size: 16,
-                                color: Colors.grey,
-                              ),
-                              const SizedBox(width: 5),
-                              Expanded(
-                                child: Text(
-                                  produit,
-                                  style: const TextStyle(color: Colors.grey),
-                                ),
-                              ),
-                            ],
-                          ),
-
-                          const SizedBox(height: 5),
-
-                          Row(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              const Icon(
-                                Icons.location_on_outlined,
-                                size: 16,
-                                color: Colors.grey,
-                              ),
-                              const SizedBox(width: 5),
-                              Expanded(
-                                child: Text(
-                                  adresse,
-                                  maxLines: 2,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: const TextStyle(color: Colors.grey),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ],
-                      ),
-                    ),
-
-                    // ==================================================
-                    // MENU TROIS POINTS
-                    // ==================================================
-                    PopupMenuButton<String>(
-                      icon: const Icon(
-                        Icons.more_vert,
-                        color: couleurPrincipale,
-                      ),
-
-                      // IMPORTANT :
-                      // On attend que le menu soit totalement fermé
-                      // avant d'ouvrir un Dialog ou un BottomSheet.
-                      onSelected: (value) {
-                        WidgetsBinding.instance.addPostFrameCallback((_) async {
-                          // Petite attente supplémentaire pour Android
-                          await Future.delayed(
-                            const Duration(milliseconds: 150),
-                          );
-
-                          if (!mounted) return;
-
-                          if (value == 'modifier') {
-                            await afficherFormulaire(
-                              fournisseurId: document.id,
-                              fournisseur: fournisseur,
-                            );
-                          } else if (value == 'supprimer') {
-                            await supprimerFournisseur(document.id);
-                          }
-                        });
-                      },
-
-                      itemBuilder: (menuContext) => const [
-                        PopupMenuItem<String>(
-                          value: 'modifier',
-                          child: Row(
                             children: [
                               Icon(
-                                Icons.edit_outlined,
+                                Icons.people_outline,
+                                size: 65,
                                 color: couleurPrincipale,
                               ),
-                              SizedBox(width: 10),
-                              Text('Modifier'),
-                            ],
-                          ),
-                        ),
 
-                        PopupMenuItem<String>(
-                          value: 'supprimer',
-                          child: Row(
-                            children: [
-                              Icon(Icons.delete_outline, color: Colors.red),
-                              SizedBox(width: 10),
+                              SizedBox(height: 18),
+
                               Text(
-                                'Supprimer',
-                                style: TextStyle(color: Colors.red),
+                                'Aucun fournisseur',
+                                style: TextStyle(
+                                  color: couleurPrincipale,
+                                  fontSize: 20,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+
+                              SizedBox(height: 8),
+
+                              Text(
+                                'Appuyez sur "Nouveau fournisseur" pour enregistrer votre premier partenaire.',
+                                textAlign: TextAlign.center,
+                                style: TextStyle(color: Colors.grey),
                               ),
                             ],
                           ),
                         ),
-                      ],
-                    ),
-                  ],
-                ),
-              );
-            },
+                      )
+                    : ListView.builder(
+                        padding: const EdgeInsets.fromLTRB(16, 8, 16, 100),
+
+                        itemCount: fournisseurs.length,
+
+                        itemBuilder: (context, index) {
+                          final document = fournisseurs[index];
+
+                          return carteFournisseur(
+                            fournisseurId: document.id,
+                            fournisseur: document.data(),
+                          );
+                        },
+                      ),
+              ),
+            ],
           );
         },
       ),
     );
   }
 }
-uuuuuuuuu

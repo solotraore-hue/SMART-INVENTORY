@@ -2,345 +2,191 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 
 import '../services/firestore_service.dart';
+import 'approvisionnement_form_page.dart';
 
 class ApprovisionnementPage extends StatefulWidget {
   const ApprovisionnementPage({super.key});
 
   @override
-  State<ApprovisionnementPage> createState() =>
-      _ApprovisionnementPageState();
+  State<ApprovisionnementPage> createState() => _ApprovisionnementPageState();
 }
 
-class _ApprovisionnementPageState
-    extends State<ApprovisionnementPage> {
-  final firestoreService = FirestoreService();
+class _ApprovisionnementPageState extends State<ApprovisionnementPage> {
+  // COULEURS
 
-  Future<void> nouvelApprovisionnement() async {
-    final formKey = GlobalKey<FormState>();
+  static const Color couleurPrincipale = Color(0xFF15576B);
+  static const Color couleurSecondaire = Color(0xFF0E6B7F);
+  static const Color couleurClaire = Color(0xFFE0F2EE);
+  static const Color couleurFond = Color(0xFFF5F6F8);
 
-    String? produitId;
-    String? nomProduit;
+  // FIRESTORE
 
-    final quantiteController = TextEditingController();
+  final FirestoreService firestoreService = FirestoreService();
 
-    try {
-      final produitsSnapshot =
-          await firestoreService.produits.get();
+  // OUVRIR LE FORMULAIRE
+  // AJOUT OU MODIFICATION
 
-      if (!mounted) return;
+  Future<void> ouvrirFormulaire({
+    String? approvisionnementId,
+    Map<String, dynamic>? approvisionnement,
+  }) async {
+    final resultat = await Navigator.of(context).push<bool>(
+      MaterialPageRoute(
+        builder: (_) => ApprovisionnementFormPage(
+          approvisionnementId: approvisionnementId,
+          approvisionnement: approvisionnement,
+        ),
+      ),
+    );
 
-      if (produitsSnapshot.docs.isEmpty) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text(
-              'Ajoutez d’abord un produit avant de faire un approvisionnement.',
-            ),
+    if (!mounted) {
+      return;
+    }
+
+    if (resultat == true) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            approvisionnementId == null
+                ? 'Approvisionnement enregistré avec succès.'
+                : 'Approvisionnement modifié avec succès.',
           ),
-        );
-        return;
-      }
-
-      await showModalBottomSheet(
-        context: context,
-        isScrollControlled: true,
-        backgroundColor: Colors.transparent,
-        builder: (bottomSheetContext) {
-          return StatefulBuilder(
-            builder: (context, setModalState) {
-              return Padding(
-                padding: EdgeInsets.only(
-                  bottom: MediaQuery.of(context).viewInsets.bottom,
-                ),
-                child: Container(
-                  padding: const EdgeInsets.all(24),
-                  decoration: const BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.vertical(
-                      top: Radius.circular(28),
-                    ),
-                  ),
-                  child: SingleChildScrollView(
-                    child: Form(
-                      key: formKey,
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Container(
-                            width: 45,
-                            height: 5,
-                            decoration: BoxDecoration(
-                              color: Colors.grey.shade300,
-                              borderRadius: BorderRadius.circular(10),
-                            ),
-                          ),
-
-                          const SizedBox(height: 20),
-
-                          const Text(
-                            'Nouvel approvisionnement',
-                            style: TextStyle(
-                              fontSize: 22,
-                              fontWeight: FontWeight.bold,
-                              color: Color(0xFF15576B),
-                            ),
-                          ),
-
-                          const SizedBox(height: 25),
-
-                          DropdownButtonFormField<String>(
-                            value: produitId,
-                            decoration: const InputDecoration(
-                              labelText: 'Produit',
-                              prefixIcon: Icon(
-                                Icons.inventory_2_outlined,
-                              ),
-                              border: OutlineInputBorder(),
-                            ),
-                            items: produitsSnapshot.docs.map((doc) {
-                              final produit = doc.data();
-
-                              return DropdownMenuItem<String>(
-                                value: doc.id,
-                                child: Text(
-                                  produit['nom']?.toString() ??
-                                      'Produit sans nom',
-                                ),
-                              );
-                            }).toList(),
-                            onChanged: (value) {
-                              final produit =
-                                  produitsSnapshot.docs.firstWhere(
-                                (doc) => doc.id == value,
-                              );
-
-                              setModalState(() {
-                                produitId = value;
-                                nomProduit =
-                                    produit.data()['nom']?.toString();
-                              });
-                            },
-                            validator: (value) {
-                              if (value == null) {
-                                return 'Veuillez sélectionner un produit';
-                              }
-                              return null;
-                            },
-                          ),
-
-                          const SizedBox(height: 18),
-
-                          TextFormField(
-                            controller: quantiteController,
-                            keyboardType: TextInputType.number,
-                            decoration: const InputDecoration(
-                              labelText: 'Quantité reçue',
-                              prefixIcon: Icon(
-                                Icons.add_box_outlined,
-                              ),
-                              border: OutlineInputBorder(),
-                            ),
-                            validator: (value) {
-                              if (value == null ||
-                                  value.trim().isEmpty) {
-                                return 'La quantité est obligatoire';
-                              }
-
-                              final quantite =
-                                  int.tryParse(value.trim());
-
-                              if (quantite == null ||
-                                  quantite <= 0) {
-                                return 'Veuillez saisir une quantité valide';
-                              }
-
-                              return null;
-                            },
-                          ),
-
-                          const SizedBox(height: 25),
-
-                          SizedBox(
-                            width: double.infinity,
-                            height: 55,
-                            child: ElevatedButton.icon(
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor:
-                                    const Color(0xFF15576B),
-                                foregroundColor: Colors.white,
-                              ),
-                              onPressed: () async {
-                                if (!formKey.currentState!
-                                    .validate()) {
-                                  return;
-                                }
-
-                                final quantiteRecue = int.parse(
-                                  quantiteController.text.trim(),
-                                );
-
-                                try {
-                                  final produitReference =
-                                      firestoreService.produits
-                                          .doc(produitId);
-
-                                  final approvisionnementReference =
-                                      firestoreService
-                                          .approvisionnements
-                                          .doc();
-
-                                  final activiteReference =
-                                      firestoreService.activites.doc();
-
-                                  await FirebaseFirestore.instance
-                                      .runTransaction(
-                                    (transaction) async {
-                                      final produitSnapshot =
-                                          await transaction.get(
-                                        produitReference,
-                                      );
-
-                                      if (!produitSnapshot.exists) {
-                                        throw Exception(
-                                          'Produit introuvable',
-                                        );
-                                      }
-
-                                      final produit =
-                                          produitSnapshot.data()!;
-
-                                      final stockActuel =
-                                          (produit['quantite'] ?? 0)
-                                              as int;
-
-                                      final nouveauStock =
-                                          stockActuel + quantiteRecue;
-
-                                      transaction.update(
-                                        produitReference,
-                                        {
-                                          'quantite': nouveauStock,
-                                        },
-                                      );
-
-                                      transaction.set(
-                                        approvisionnementReference,
-                                        {
-                                          'produitId': produitId,
-                                          'nomProduit': nomProduit,
-                                          'quantite': quantiteRecue,
-                                          'date': FieldValue
-                                              .serverTimestamp(),
-                                        },
-                                      );
-
-                                      transaction.set(
-                                        activiteReference,
-                                        {
-                                          'titre':
-                                              'Approvisionnement enregistré',
-                                          'description':
-                                              '$quantiteRecue unité(s) de $nomProduit',
-                                          'type':
-                                              'approvisionnement',
-                                          'produitId': produitId,
-                                          'approvisionnementId':
-                                              approvisionnementReference.id,
-                                          'date': FieldValue
-                                              .serverTimestamp(),
-                                        },
-                                      );
-                                    },
-                                  );
-
-                                  if (!bottomSheetContext.mounted) {
-                                    return;
-                                  }
-
-                                  Navigator.pop(
-                                    bottomSheetContext,
-                                  );
-
-                                  if (!mounted) return;
-
-                                  ScaffoldMessenger.of(context)
-                                      .showSnackBar(
-                                    const SnackBar(
-                                      content: Text(
-                                        'Approvisionnement enregistré avec succès.',
-                                      ),
-                                    ),
-                                  );
-                                } catch (e) {
-                                  if (!mounted) return;
-
-                                  ScaffoldMessenger.of(context)
-                                      .showSnackBar(
-                                    const SnackBar(
-                                      content: Text(
-                                        'Impossible d’enregistrer cet approvisionnement.',
-                                      ),
-                                    ),
-                                  );
-                                }
-                              },
-                              icon: const Icon(
-                                Icons.save_outlined,
-                              ),
-                              label: const Text(
-                                'Enregistrer',
-                              ),
-                            ),
-                          ),
-
-                          const SizedBox(height: 15),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-              );
-            },
-          );
-        },
+        ),
       );
-    } finally {
-      quantiteController.dispose();
     }
   }
 
-  Future<void> supprimerApprovisionnement(
-    String approvisionnementId,
-    Map<String, dynamic> approvisionnement,
-  ) async {
-    final confirmation = await showDialog<bool>(
+  // TROIS POINTS
+
+  Future<void> ouvrirActions({
+    required String approvisionnementId,
+    required Map<String, dynamic> approvisionnement,
+  }) async {
+    final action = await showDialog<String>(
       context: context,
+
       builder: (dialogContext) {
         return AlertDialog(
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(20),
+            borderRadius: BorderRadius.circular(18),
           ),
+
+          title: const Text(
+            'Actions',
+            style: TextStyle(
+              color: couleurPrincipale,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+
+            children: [
+              // MODIFIER
+              ListTile(
+                leading: const Icon(
+                  Icons.edit_outlined,
+                  color: couleurPrincipale,
+                ),
+
+                title: const Text('Modifier'),
+
+                onTap: () {
+                  Navigator.of(dialogContext).pop('modifier');
+                },
+              ),
+
+              // SUPPRIMER
+              ListTile(
+                leading: const Icon(Icons.delete_outline, color: Colors.red),
+
+                title: const Text('Supprimer'),
+
+                onTap: () {
+                  Navigator.of(dialogContext).pop('supprimer');
+                },
+              ),
+            ],
+          ),
+        );
+      },
+    );
+
+    if (!mounted || action == null) {
+      return;
+    }
+
+    // MODIFIER
+
+    if (action == 'modifier') {
+      await ouvrirFormulaire(
+        approvisionnementId: approvisionnementId,
+        approvisionnement: approvisionnement,
+      );
+    }
+
+    // SUPPRIMER
+
+    if (action == 'supprimer') {
+      await supprimerApprovisionnement(
+        approvisionnementId: approvisionnementId,
+        approvisionnement: approvisionnement,
+      );
+    }
+  }
+
+  // SUPPRIMER
+
+  Future<void> supprimerApprovisionnement({
+    required String approvisionnementId,
+    required Map<String, dynamic> approvisionnement,
+  }) async {
+    final nomProduit = approvisionnement['nomProduit']?.toString() ?? 'Produit';
+
+    final quantite = (approvisionnement['quantite'] as num?)?.toInt() ?? 0;
+
+    final confirmation = await showDialog<bool>(
+      context: context,
+
+      builder: (dialogContext) {
+        return AlertDialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(18),
+          ),
+
           title: const Text(
             'Supprimer l’approvisionnement',
+            style: TextStyle(
+              color: couleurPrincipale,
+              fontWeight: FontWeight.bold,
+            ),
           ),
-          content: const Text(
-            'Voulez-vous vraiment supprimer cet approvisionnement ? '
+
+          content: Text(
+            'Voulez-vous vraiment supprimer la réception '
+            'de $quantite unité(s) de "$nomProduit" ?\n\n'
             'La quantité correspondante sera retirée du stock.',
           ),
+
           actions: [
             TextButton(
               onPressed: () {
-                Navigator.pop(dialogContext, false);
+                Navigator.of(dialogContext).pop(false);
               },
               child: const Text('Annuler'),
             ),
+
             ElevatedButton(
               style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.red,
                 foregroundColor: Colors.white,
               ),
+
               onPressed: () {
-                Navigator.pop(dialogContext, true);
+                Navigator.of(dialogContext).pop(true);
               },
+
               child: const Text('Supprimer'),
             ),
           ],
@@ -348,280 +194,433 @@ class _ApprovisionnementPageState
       },
     );
 
-    if (confirmation != true) return;
+    if (!mounted || confirmation != true) {
+      return;
+    }
 
     try {
-      final produitId =
-          approvisionnement['produitId']?.toString();
+      final produitId = approvisionnement['produitId']?.toString();
 
-      final quantite =
-          (approvisionnement['quantite'] ?? 0) as int;
+      // ACTIVITÉS
 
-      final approvisionnementReference =
-          firestoreService.approvisionnements
-              .doc(approvisionnementId);
+      final activitesSnapshot = await firestoreService.activites
+          .where('approvisionnementId', isEqualTo: approvisionnementId)
+          .get();
 
-      final activitesSnapshot =
-          await firestoreService.activites
-              .where(
-                'approvisionnementId',
-                isEqualTo: approvisionnementId,
-              )
-              .get();
+      await FirebaseFirestore.instance.runTransaction((transaction) async {
+        // RETIRER DU STOCK
 
-      await FirebaseFirestore.instance.runTransaction(
-        (transaction) async {
-          if (produitId != null && produitId.isNotEmpty) {
-            final produitReference =
-                firestoreService.produits.doc(produitId);
+        if (produitId != null && produitId.isNotEmpty) {
+          final produitReference = firestoreService.produits.doc(produitId);
 
-            final produitSnapshot =
-                await transaction.get(produitReference);
+          final produitSnapshot = await transaction.get(produitReference);
 
-            if (produitSnapshot.exists) {
-              final produit = produitSnapshot.data()!;
+          if (produitSnapshot.exists) {
+            final produit = produitSnapshot.data();
 
-              final stockActuel =
-                  (produit['quantite'] ?? 0) as int;
+            final stockActuel = (produit?['quantite'] as num?)?.toInt() ?? 0;
 
-              final nouveauStock = stockActuel - quantite;
-
-              transaction.update(
-                produitReference,
-                {
-                  'quantite':
-                      nouveauStock < 0 ? 0 : nouveauStock,
-                },
+            if (stockActuel < quantite) {
+              throw Exception(
+                'Impossible de supprimer cet approvisionnement. '
+                'Le stock actuel de "$nomProduit" est insuffisant.',
               );
             }
+
+            transaction.update(produitReference, {
+              'quantite': stockActuel - quantite,
+
+              'dateModification': FieldValue.serverTimestamp(),
+            });
           }
+        }
 
-          transaction.delete(approvisionnementReference);
+        // SUPPRIMER APPROVISIONNEMENT
 
-          for (final activite in activitesSnapshot.docs) {
-            transaction.delete(activite.reference);
-          }
-        },
-      );
+        transaction.delete(
+          firestoreService.approvisionnements.doc(approvisionnementId),
+        );
 
-      if (!mounted) return;
+        // SUPPRIMER ACTIVITÉ
+
+        for (final activite in activitesSnapshot.docs) {
+          transaction.delete(activite.reference);
+        }
+      });
+
+      if (!mounted) {
+        return;
+      }
 
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text(
-            'Approvisionnement supprimé et stock mis à jour.',
-          ),
+          content: Text('Approvisionnement supprimé avec succès.'),
         ),
       );
     } catch (e) {
-      if (!mounted) return;
+      if (!mounted) {
+        return;
+      }
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            'Impossible de supprimer cet approvisionnement.',
-          ),
-        ),
-      );
+      String message = e.toString();
+
+      message = message.replaceFirst('Exception: ', '');
+
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(message)));
     }
   }
+
+  // TOTAL REÇU
+
+  Widget carteTotalRecu({
+    required int totalQuantite,
+    required int totalReceptions,
+  }) {
+    return Container(
+      width: double.infinity,
+
+      margin: const EdgeInsets.fromLTRB(18, 18, 18, 10),
+
+      padding: const EdgeInsets.all(20),
+
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(22),
+
+        gradient: const LinearGradient(
+          colors: [couleurPrincipale, couleurSecondaire],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+
+        boxShadow: const [
+          BoxShadow(
+            color: Color.fromRGBO(0, 0, 0, 0.10),
+            blurRadius: 12,
+            offset: Offset(0, 5),
+          ),
+        ],
+      ),
+
+      child: Row(
+        children: [
+          Container(
+            width: 55,
+            height: 55,
+
+            decoration: BoxDecoration(
+              color: Colors.white24,
+              borderRadius: BorderRadius.circular(15),
+            ),
+
+            child: const Icon(
+              Icons.local_shipping_outlined,
+              color: Colors.white,
+              size: 30,
+            ),
+          ),
+
+          const SizedBox(width: 16),
+
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+
+              children: [
+                const Text(
+                  'Total reçu',
+                  style: TextStyle(color: Colors.white70, fontSize: 14),
+                ),
+
+                const SizedBox(height: 5),
+
+                Text(
+                  '$totalQuantite unité(s)',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 23,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+
+                const SizedBox(height: 4),
+
+                Text(
+                  '$totalReceptions réception(s) enregistrée(s)',
+                  style: const TextStyle(color: Colors.white70, fontSize: 12),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // CARTE APPROVISIONNEMENT
+
+  Widget carteApprovisionnement({
+    required String approvisionnementId,
+    required Map<String, dynamic> approvisionnement,
+  }) {
+    final nomProduit = approvisionnement['nomProduit']?.toString() ?? 'Produit';
+
+    final quantite = (approvisionnement['quantite'] as num?)?.toInt() ?? 0;
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 14),
+
+      padding: const EdgeInsets.all(16),
+
+      decoration: BoxDecoration(
+        color: Colors.white,
+
+        borderRadius: BorderRadius.circular(22),
+
+        boxShadow: const [
+          BoxShadow(
+            color: Color.fromRGBO(0, 0, 0, 0.04),
+            blurRadius: 10,
+            offset: Offset(0, 4),
+          ),
+        ],
+      ),
+
+      child: Row(
+        children: [
+          // ICÔNE
+          Container(
+            width: 64,
+            height: 64,
+
+            decoration: BoxDecoration(
+              color: couleurClaire,
+              borderRadius: BorderRadius.circular(18),
+            ),
+
+            child: const Icon(
+              Icons.local_shipping_outlined,
+              color: couleurPrincipale,
+              size: 30,
+            ),
+          ),
+
+          const SizedBox(width: 16),
+
+          // INFORMATIONS
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+
+              children: [
+                Text(
+                  nomProduit,
+
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+
+                  style: const TextStyle(
+                    color: Colors.black87,
+                    fontSize: 17,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+
+                const SizedBox(height: 8),
+
+                Text(
+                  'Quantité reçue : $quantite',
+
+                  style: const TextStyle(color: Colors.grey, fontSize: 14),
+                ),
+              ],
+            ),
+          ),
+
+          // TROIS POINTS
+          IconButton(
+            tooltip: 'Actions',
+
+            onPressed: () {
+              ouvrirActions(
+                approvisionnementId: approvisionnementId,
+
+                approvisionnement: approvisionnement,
+              );
+            },
+
+            icon: const Icon(
+              Icons.more_vert,
+              color: couleurPrincipale,
+              size: 28,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // INTERFACE
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF5F6F8),
+      backgroundColor: couleurFond,
 
       appBar: AppBar(
-        backgroundColor: const Color(0xFF15576B),
-        foregroundColor: Colors.white,
-        elevation: 0,
+        toolbarHeight: 82,
+
         title: const Text(
           'Approvisionnement',
-          style: TextStyle(
-            fontWeight: FontWeight.bold,
-          ),
+          style: TextStyle(fontSize: 23, fontWeight: FontWeight.bold),
         ),
       ),
 
+      // AJOUTER
       floatingActionButton: FloatingActionButton.extended(
-        backgroundColor: const Color(0xFF15576B),
-        foregroundColor: Colors.white,
-        onPressed: nouvelApprovisionnement,
-        icon: const Icon(Icons.add),
+        onPressed: () {
+          ouvrirFormulaire();
+        },
+
+        icon: const Icon(Icons.add, size: 27),
+
         label: const Text(
           'Ajouter',
+          style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
         ),
       ),
 
-      body: StreamBuilder<
-          QuerySnapshot<Map<String, dynamic>>>(
-        stream: firestoreService.approvisionnements
-            .orderBy(
-              'date',
-              descending: true,
-            )
-            .snapshots(),
+      // FIRESTORE
+      body: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+        stream: firestoreService.approvisionnements.snapshots(),
+
         builder: (context, snapshot) {
-          if (snapshot.hasError) {
+          if (snapshot.connectionState == ConnectionState.waiting &&
+              !snapshot.hasData) {
             return const Center(
-              child: Text(
-                'Impossible de charger les approvisionnements.',
-              ),
+              child: CircularProgressIndicator(color: couleurPrincipale),
             );
           }
 
-          if (!snapshot.hasData) {
-            return const Center(
-              child: CircularProgressIndicator(),
+          if (snapshot.hasError) {
+            return Center(
+              child: Padding(
+                padding: const EdgeInsets.all(25),
+
+                child: Text(
+                  'Impossible de charger les approvisionnements.\n'
+                  '${snapshot.error}',
+
+                  textAlign: TextAlign.center,
+                ),
+              ),
             );
           }
 
           final approvisionnements =
-              snapshot.data!.docs;
+              List<QueryDocumentSnapshot<Map<String, dynamic>>>.from(
+                snapshot.data?.docs ?? [],
+              );
 
-          if (approvisionnements.isEmpty) {
-            return const Center(
-              child: Column(
-                mainAxisAlignment:
-                    MainAxisAlignment.center,
-                children: [
-                  Icon(
-                    Icons.local_shipping_outlined,
-                    size: 80,
-                    color: Color(0xFF15576B),
-                  ),
-                  SizedBox(height: 15),
-                  Text(
-                    'Aucun approvisionnement',
-                    style: TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  SizedBox(height: 5),
-                  Text(
-                    'Vos approvisionnements apparaîtront ici.',
-                  ),
-                ],
-              ),
-            );
+          // TRI DU PLUS RÉCENT
+
+          approvisionnements.sort((a, b) {
+            final dateA = a.data()['date'];
+
+            final dateB = b.data()['date'];
+
+            if (dateA is Timestamp && dateB is Timestamp) {
+              return dateB.compareTo(dateA);
+            }
+
+            if (dateA is Timestamp) {
+              return -1;
+            }
+
+            if (dateB is Timestamp) {
+              return 1;
+            }
+
+            return 0;
+          });
+
+          // TOTAL REÇU
+
+          int totalQuantiteRecue = 0;
+
+          for (final document in approvisionnements) {
+            totalQuantiteRecue +=
+                (document.data()['quantite'] as num?)?.toInt() ?? 0;
           }
 
-          return ListView.builder(
-            padding: const EdgeInsets.fromLTRB(
-              16,
-              16,
-              16,
-              100,
-            ),
-            itemCount: approvisionnements.length,
-            itemBuilder: (context, index) {
-              final document =
-                  approvisionnements[index];
+          return Column(
+            children: [
+              // TOTAL EN HAUT
+              carteTotalRecu(
+                totalQuantite: totalQuantiteRecue,
 
-              final approvisionnement =
-                  document.data();
+                totalReceptions: approvisionnements.length,
+              ),
 
-              final nomProduit =
-                  approvisionnement['nomProduit']
-                          ?.toString() ??
-                      'Produit';
+              const SizedBox(height: 8),
 
-              final quantite =
-                  approvisionnement['quantite'] ?? 0;
+              // LISTE
+              Expanded(
+                child: approvisionnements.isEmpty
+                    ? const Center(
+                        child: Padding(
+                          padding: EdgeInsets.all(30),
 
-              return Container(
-                margin: const EdgeInsets.only(
-                  bottom: 12,
-                ),
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius:
-                      BorderRadius.circular(18),
-                ),
-                child: Row(
-                  children: [
-                    Container(
-                      width: 52,
-                      height: 52,
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFE0F2EE),
-                        borderRadius:
-                            BorderRadius.circular(14),
-                      ),
-                      child: const Icon(
-                        Icons.local_shipping_outlined,
-                        color: Color(0xFF15576B),
-                      ),
-                    ),
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
 
-                    const SizedBox(width: 14),
-
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment:
-                            CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            nomProduit,
-                            style: const TextStyle(
-                              fontSize: 17,
-                              fontWeight:
-                                  FontWeight.bold,
-                            ),
-                          ),
-
-                          const SizedBox(height: 5),
-
-                          Text(
-                            'Quantité reçue : $quantite',
-                            style: const TextStyle(
-                              color: Colors.grey,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-
-                    PopupMenuButton<String>(
-                      icon: const Icon(
-                        Icons.more_vert,
-                        color: Color(0xFF15576B),
-                      ),
-                      onSelected: (value) {
-                        if (value == 'supprimer') {
-                          supprimerApprovisionnement(
-                            document.id,
-                            approvisionnement,
-                          );
-                        }
-                      },
-                      itemBuilder: (context) => const [
-                        PopupMenuItem(
-                          value: 'supprimer',
-                          child: Row(
                             children: [
                               Icon(
-                                Icons.delete_outline,
-                                color: Colors.red,
+                                Icons.local_shipping_outlined,
+                                size: 65,
+                                color: couleurPrincipale,
                               ),
-                              SizedBox(width: 8),
+
+                              SizedBox(height: 18),
+
                               Text(
-                                'Supprimer',
+                                'Aucun approvisionnement',
                                 style: TextStyle(
-                                  color: Colors.red,
+                                  color: couleurPrincipale,
+                                  fontSize: 20,
+                                  fontWeight: FontWeight.bold,
                                 ),
+                              ),
+
+                              SizedBox(height: 8),
+
+                              Text(
+                                'Appuyez sur "Ajouter" pour enregistrer votre première réception.',
+                                textAlign: TextAlign.center,
+                                style: TextStyle(color: Colors.grey),
                               ),
                             ],
                           ),
                         ),
-                      ],
-                    ),
-                  ],
-                ),
-              );
-            },
+                      )
+                    : ListView.builder(
+                        padding: const EdgeInsets.fromLTRB(18, 8, 18, 105),
+
+                        itemCount: approvisionnements.length,
+
+                        itemBuilder: (context, index) {
+                          final document = approvisionnements[index];
+
+                          return carteApprovisionnement(
+                            approvisionnementId: document.id,
+
+                            approvisionnement: document.data(),
+                          );
+                        },
+                      ),
+              ),
+            ],
           );
         },
       ),

@@ -2,6 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 
 import '../services/firestore_service.dart';
+import 'vente_form_page.dart';
 
 class VentesPage extends StatefulWidget {
   const VentesPage({super.key});
@@ -11,369 +12,193 @@ class VentesPage extends StatefulWidget {
 }
 
 class _VentesPageState extends State<VentesPage> {
-  final firestoreService = FirestoreService();
+  static const Color couleurPrincipale = Color(0xFF15576B);
+  static const Color couleurSecondaire = Color(0xFF0E6B7F);
+  static const Color couleurClaire = Color(0xFFE0F2EE);
+  static const Color couleurFond = Color(0xFFF5F6F8);
 
-  Future<void> nouvelleVente() async {
-    final formKey = GlobalKey<FormState>();
+  final FirestoreService firestoreService = FirestoreService();
 
-    String? produitId;
-    String? nomProduit;
-    int? quantiteDisponible;
+  // FORMAT DES MONTANTS
 
-    final quantiteController = TextEditingController();
+  String formaterMontant(num montant) {
+    final texte = montant.toStringAsFixed(0);
+    final resultat = StringBuffer();
 
-    final produitsSnapshot =
-        await firestoreService.produits.get();
+    for (int i = 0; i < texte.length; i++) {
+      final positionRestante = texte.length - i;
 
-    if (!mounted) return;
+      resultat.write(texte[i]);
 
-    if (produitsSnapshot.docs.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            'Ajoutez d’abord un produit avant de faire une vente.',
-          ),
-        ),
-      );
+      if (positionRestante > 1 && positionRestante % 3 == 1) {
+        resultat.write(' ');
+      }
+    }
+
+    return resultat.toString();
+  }
+
+  // PRODUITS D'UNE VENTE
+
+  List<Map<String, dynamic>> recupererProduitsVente(
+    Map<String, dynamic> vente,
+  ) {
+    final valeur = vente['produits'];
+
+    if (valeur is List) {
+      return valeur
+          .whereType<Map>()
+          .map((produit) => Map<String, dynamic>.from(produit))
+          .toList();
+    }
+
+    final produitId = vente['produitId']?.toString();
+
+    if (produitId != null && produitId.isNotEmpty) {
+      return [
+        {
+          'produitId': produitId,
+          'nom': vente['nomProduit'] ?? vente['produit'] ?? 'Produit',
+          'quantite': vente['quantite'] ?? 0,
+          'prixUnitaire': vente['prixUnitaire'] ?? 0,
+          'sousTotal': vente['montantTotal'] ?? 0,
+        },
+      ];
+    }
+
+    return [];
+  }
+
+  // OUVRIR AJOUT / MODIFICATION
+
+  Future<void> ouvrirFormulaire({
+    String? venteId,
+    Map<String, dynamic>? vente,
+  }) async {
+    final resultat = await Navigator.of(context).push<bool>(
+      MaterialPageRoute(
+        builder: (_) => VenteFormPage(venteId: venteId, vente: vente),
+      ),
+    );
+
+    if (!mounted) {
       return;
     }
 
-    await showModalBottomSheet(
+    if (resultat == true) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            venteId == null
+                ? 'Vente enregistrée avec succès.'
+                : 'Vente modifiée avec succès.',
+          ),
+        ),
+      );
+    }
+  }
+
+  // TROIS POINTS
+
+  Future<void> ouvrirActions({
+    required String venteId,
+    required Map<String, dynamic> vente,
+  }) async {
+    final action = await showDialog<String>(
       context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (bottomSheetContext) {
-        return StatefulBuilder(
-          builder: (context, setModalState) {
-            return Padding(
-              padding: EdgeInsets.only(
-                bottom: MediaQuery.of(context).viewInsets.bottom,
-              ),
-              child: Container(
-                padding: const EdgeInsets.all(24),
-                decoration: const BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.vertical(
-                    top: Radius.circular(28),
-                  ),
+      builder: (dialogContext) {
+        return AlertDialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(18),
+          ),
+          title: const Text(
+            'Actions',
+            style: TextStyle(
+              color: couleurPrincipale,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // MODIFIER
+              ListTile(
+                leading: const Icon(
+                  Icons.edit_outlined,
+                  color: couleurPrincipale,
                 ),
-                child: SingleChildScrollView(
-                  child: Form(
-                    key: formKey,
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Container(
-                          width: 45,
-                          height: 5,
-                          decoration: BoxDecoration(
-                            color: Colors.grey.shade300,
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                        ),
-
-                        const SizedBox(height: 20),
-
-                        const Text(
-                          'Nouvelle vente',
-                          style: TextStyle(
-                            fontSize: 22,
-                            fontWeight: FontWeight.bold,
-                            color: Color(0xFF15576B),
-                          ),
-                        ),
-
-                        const SizedBox(height: 25),
-
-                        DropdownButtonFormField<String>(
-                          value: produitId,
-                          decoration: const InputDecoration(
-                            labelText: 'Produit',
-                            prefixIcon: Icon(
-                              Icons.inventory_2_outlined,
-                            ),
-                            border: OutlineInputBorder(),
-                          ),
-                          items: produitsSnapshot.docs.map((doc) {
-                            final produit = doc.data();
-
-                            return DropdownMenuItem<String>(
-                              value: doc.id,
-                              child: Text(
-                                '${produit['nom']} (${produit['quantite']} disponible)',
-                              ),
-                            );
-                          }).toList(),
-                          onChanged: (value) {
-                            final produit =
-                                produitsSnapshot.docs.firstWhere(
-                              (doc) => doc.id == value,
-                            );
-
-                            setModalState(() {
-                              produitId = value;
-                              nomProduit =
-                                  produit.data()['nom']?.toString();
-
-                              quantiteDisponible =
-                                  produit.data()['quantite'] as int?;
-                            });
-                          },
-                          validator: (value) {
-                            if (value == null) {
-                              return 'Veuillez sélectionner un produit';
-                            }
-                            return null;
-                          },
-                        ),
-
-                        const SizedBox(height: 16),
-
-                        if (quantiteDisponible != null)
-                          Align(
-                            alignment: Alignment.centerLeft,
-                            child: Text(
-                              'Quantité disponible : $quantiteDisponible',
-                              style: const TextStyle(
-                                color: Color(0xFF15576B),
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ),
-
-                        const SizedBox(height: 16),
-
-                        TextFormField(
-                          controller: quantiteController,
-                          keyboardType: TextInputType.number,
-                          decoration: const InputDecoration(
-                            labelText: 'Quantité vendue',
-                            prefixIcon: Icon(
-                              Icons.shopping_cart_outlined,
-                            ),
-                            border: OutlineInputBorder(),
-                          ),
-                          validator: (value) {
-                            if (value == null ||
-                                value.trim().isEmpty) {
-                              return 'La quantité est obligatoire';
-                            }
-
-                            final quantite =
-                                int.tryParse(value.trim());
-
-                            if (quantite == null ||
-                                quantite <= 0) {
-                              return 'Veuillez saisir une quantité valide';
-                            }
-
-                            if (quantiteDisponible != null &&
-                                quantite >
-                                    quantiteDisponible!) {
-                              return 'La quantité vendue dépasse le stock disponible';
-                            }
-
-                            return null;
-                          },
-                        ),
-
-                        const SizedBox(height: 25),
-
-                        SizedBox(
-                          width: double.infinity,
-                          height: 55,
-                          child: ElevatedButton.icon(
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor:
-                                  const Color(0xFF15576B),
-                              foregroundColor: Colors.white,
-                            ),
-                            onPressed: () async {
-                              if (!formKey.currentState!
-                                  .validate()) {
-                                return;
-                              }
-
-                              final quantiteVendue = int.parse(
-                                quantiteController.text.trim(),
-                              );
-
-                              try {
-                                final produitReference =
-                                    firestoreService.produits
-                                        .doc(produitId);
-
-                                final venteReference =
-                                    firestoreService.ventes.doc();
-
-                                final activiteReference =
-                                    firestoreService.activites.doc();
-
-                                await FirebaseFirestore.instance
-                                    .runTransaction(
-                                  (transaction) async {
-                                    final produitSnapshot =
-                                        await transaction.get(
-                                      produitReference,
-                                    );
-
-                                    if (!produitSnapshot.exists) {
-                                      throw Exception(
-                                        'Produit introuvable',
-                                      );
-                                    }
-
-                                    final produit =
-                                        produitSnapshot.data()!;
-
-                                    final stockActuel =
-                                        (produit['quantite'] ?? 0)
-                                            as int;
-
-                                    if (quantiteVendue >
-                                        stockActuel) {
-                                      throw Exception(
-                                        'Stock insuffisant',
-                                      );
-                                    }
-
-                                    final prixUnitaire =
-                                        (produit['prixUnitaire'] ?? 0)
-                                            as num;
-
-                                    final montantTotal =
-                                        quantiteVendue *
-                                            prixUnitaire;
-
-                                    transaction.update(
-                                      produitReference,
-                                      {
-                                        'quantite':
-                                            stockActuel -
-                                                quantiteVendue,
-                                      },
-                                    );
-
-                                    transaction.set(
-                                      venteReference,
-                                      {
-                                        'produitId': produitId,
-                                        'nomProduit': nomProduit,
-                                        'quantite':
-                                            quantiteVendue,
-                                        'prixUnitaire':
-                                            prixUnitaire,
-                                        'montantTotal':
-                                            montantTotal,
-                                        'date':
-                                            FieldValue.serverTimestamp(),
-                                      },
-                                    );
-
-                                    transaction.set(
-                                      activiteReference,
-                                      {
-                                        'titre':
-                                            'Vente enregistrée',
-                                        'description':
-                                            '$quantiteVendue unité(s) de $nomProduit',
-                                        'type': 'vente',
-                                        'produitId': produitId,
-                                        'venteId':
-                                            venteReference.id,
-                                        'date':
-                                            FieldValue.serverTimestamp(),
-                                      },
-                                    );
-                                  },
-                                );
-
-                                if (!bottomSheetContext.mounted) {
-                                  return;
-                                }
-
-                                Navigator.pop(
-                                  bottomSheetContext,
-                                );
-
-                                if (!mounted) return;
-
-                                ScaffoldMessenger.of(context)
-                                    .showSnackBar(
-                                  const SnackBar(
-                                    content: Text(
-                                      'Vente enregistrée avec succès',
-                                    ),
-                                  ),
-                                );
-                              } catch (e) {
-                                if (!mounted) return;
-
-                                ScaffoldMessenger.of(context)
-                                    .showSnackBar(
-                                  SnackBar(
-                                    content: Text(
-                                      e.toString().contains(
-                                        'Stock insuffisant',
-                                      )
-                                          ? 'Stock insuffisant. Vente impossible.'
-                                          : 'Une erreur est survenue lors de la vente.',
-                                    ),
-                                  ),
-                                );
-                              }
-                            },
-                            icon: const Icon(
-                              Icons.shopping_cart_checkout,
-                            ),
-                            label: const Text(
-                              'Enregistrer la vente',
-                            ),
-                          ),
-                        ),
-
-                        const SizedBox(height: 15),
-                      ],
-                    ),
-                  ),
-                ),
+                title: const Text('Modifier'),
+                onTap: () {
+                  Navigator.of(dialogContext).pop('modifier');
+                },
               ),
-            );
-          },
+
+              // SUPPRIMER
+              ListTile(
+                leading: const Icon(Icons.delete_outline, color: Colors.red),
+                title: const Text('Supprimer'),
+                onTap: () {
+                  Navigator.of(dialogContext).pop('supprimer');
+                },
+              ),
+            ],
+          ),
         );
       },
     );
 
-    quantiteController.dispose();
+    if (!mounted || action == null) {
+      return;
+    }
+
+    if (action == 'modifier') {
+      await ouvrirFormulaire(venteId: venteId, vente: vente);
+    }
+
+    if (action == 'supprimer') {
+      await supprimerVente(venteId: venteId, vente: vente);
+    }
   }
 
-  Future<void> supprimerVente(
-    String venteId,
-    Map<String, dynamic> vente,
-  ) async {
+  // SUPPRIMER UNE VENTE
+
+  Future<void> supprimerVente({
+    required String venteId,
+    required Map<String, dynamic> vente,
+  }) async {
     final confirmation = await showDialog<bool>(
       context: context,
       builder: (dialogContext) {
         return AlertDialog(
-          title: const Text('Supprimer la vente'),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(18),
+          ),
+          title: const Text(
+            'Supprimer la vente',
+            style: TextStyle(
+              color: couleurPrincipale,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
           content: const Text(
-            'Voulez-vous vraiment supprimer cette vente ? '
-            'La quantité vendue sera remise dans le stock.',
+            'Voulez-vous vraiment supprimer cette vente ?\n\n'
+            'Les quantités vendues seront remises dans le stock.',
           ),
           actions: [
             TextButton(
               onPressed: () {
-                Navigator.pop(dialogContext, false);
+                Navigator.of(dialogContext).pop(false);
               },
               child: const Text('Annuler'),
             ),
+
             ElevatedButton(
               style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.red,
                 foregroundColor: Colors.white,
               ),
               onPressed: () {
-                Navigator.pop(dialogContext, true);
+                Navigator.of(dialogContext).pop(true);
               },
               child: const Text('Supprimer'),
             ),
@@ -382,376 +207,395 @@ class _VentesPageState extends State<VentesPage> {
       },
     );
 
-    if (confirmation != true) return;
+    if (!mounted || confirmation != true) {
+      return;
+    }
 
     try {
-      final produitId = vente['produitId'];
-      final quantiteVendue =
-          (vente['quantite'] ?? 0) as int;
+      final produits = recupererProduitsVente(vente);
 
-      final produitReference =
-          firestoreService.produits.doc(produitId);
+      final activitesSnapshot = await firestoreService.activites
+          .where('venteId', isEqualTo: venteId)
+          .get();
 
-      final venteReference =
-          firestoreService.ventes.doc(venteId);
+      await FirebaseFirestore.instance.runTransaction((transaction) async {
+        final List<DocumentSnapshot<Map<String, dynamic>>> produitsSnapshots =
+            [];
 
-      final activitesSnapshot =
-          await firestoreService.activites
-              .where(
-                'venteId',
-                isEqualTo: venteId,
-              )
-              .get();
+        final List<Map<String, dynamic>> produitsExistants = [];
 
-      await FirebaseFirestore.instance.runTransaction(
-        (transaction) async {
-          final produitSnapshot =
-              await transaction.get(produitReference);
+        // LECTURES
 
-          if (produitSnapshot.exists) {
-            final produit = produitSnapshot.data()!;
+        for (final produit in produits) {
+          final produitId = produit['produitId']?.toString();
 
-            final stockActuel =
-                (produit['quantite'] ?? 0) as int;
-
-            transaction.update(
-              produitReference,
-              {
-                'quantite':
-                    stockActuel + quantiteVendue,
-              },
-            );
+          if (produitId == null || produitId.isEmpty) {
+            continue;
           }
 
-          transaction.delete(venteReference);
+          final snapshot = await transaction.get(
+            firestoreService.produits.doc(produitId),
+          );
 
-          for (final activite
-              in activitesSnapshot.docs) {
-            transaction.delete(activite.reference);
+          if (snapshot.exists) {
+            produitsSnapshots.add(snapshot);
+
+            produitsExistants.add(produit);
           }
-        },
-      );
+        }
 
-      if (!mounted) return;
+        // RESTAURER STOCK
+
+        for (int i = 0; i < produitsSnapshots.length; i++) {
+          final snapshot = produitsSnapshots[i];
+
+          final produit = produitsExistants[i];
+
+          final stock = (snapshot.data()?['quantite'] as num?)?.toInt() ?? 0;
+
+          final quantite = (produit['quantite'] as num?)?.toInt() ?? 0;
+
+          transaction.update(snapshot.reference, {
+            'quantite': stock + quantite,
+            'dateModification': FieldValue.serverTimestamp(),
+          });
+        }
+
+        // SUPPRIMER VENTE
+
+        transaction.delete(firestoreService.ventes.doc(venteId));
+
+        // SUPPRIMER ACTIVITÉS
+
+        for (final activite in activitesSnapshot.docs) {
+          transaction.delete(activite.reference);
+        }
+      });
+
+      if (!mounted) {
+        return;
+      }
 
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text(
-            'Vente supprimée et stock restauré.',
-          ),
+          content: Text('Vente supprimée. Le stock a été restauré.'),
         ),
       );
     } catch (e) {
-      if (!mounted) return;
+      if (!mounted) {
+        return;
+      }
 
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            'Impossible de supprimer cette vente.',
-          ),
-        ),
+        SnackBar(content: Text('Impossible de supprimer la vente : $e')),
       );
     }
   }
 
+  // CARTE TOTAL
+
+  Widget carteTotalVentes({
+    required double chiffreAffaires,
+    required int nombreVentes,
+  }) {
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.fromLTRB(18, 18, 18, 12),
+      padding: const EdgeInsets.all(22),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(24),
+        gradient: const LinearGradient(
+          colors: [couleurPrincipale, couleurSecondaire],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Chiffre d’affaires total',
+            style: TextStyle(color: Colors.white70, fontSize: 16),
+          ),
+
+          const SizedBox(height: 12),
+
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerLeft,
+            child: Text(
+              '${formaterMontant(chiffreAffaires)} FCFA',
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 32,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
+
+          const SizedBox(height: 14),
+
+          Text(
+            '$nombreVentes vente(s) enregistrée(s)',
+            style: const TextStyle(color: Colors.white70, fontSize: 14),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // CARTE VENTE
+
+  Widget carteVente({
+    required String venteId,
+    required Map<String, dynamic> vente,
+  }) {
+    final produits = recupererProduitsVente(vente);
+
+    final montantTotal = (vente['montantTotal'] as num?)?.toDouble() ?? 0;
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 14),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(22),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 64,
+            height: 64,
+            decoration: BoxDecoration(
+              color: couleurClaire,
+              borderRadius: BorderRadius.circular(18),
+            ),
+            child: const Icon(
+              Icons.shopping_cart_outlined,
+              color: couleurPrincipale,
+              size: 31,
+            ),
+          ),
+
+          const SizedBox(width: 16),
+
+          Expanded(
+            child: produits.isEmpty
+                ? Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Vente',
+                        style: TextStyle(
+                          fontSize: 17,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+
+                      const SizedBox(height: 8),
+
+                      Text(
+                        '${formaterMontant(montantTotal)} FCFA',
+                        style: const TextStyle(
+                          color: couleurPrincipale,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ],
+                  )
+                : Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      ...produits.asMap().entries.map((entree) {
+                        final produit = entree.value;
+
+                        final nom = produit['nom']?.toString() ?? 'Produit';
+
+                        final quantite =
+                            (produit['quantite'] as num?)?.toInt() ?? 0;
+
+                        final sousTotal =
+                            (produit['sousTotal'] as num?)?.toDouble() ?? 0;
+
+                        return Padding(
+                          padding: const EdgeInsets.only(bottom: 10),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                nom,
+                                style: const TextStyle(
+                                  fontSize: 17,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+
+                              const SizedBox(height: 6),
+
+                              Text(
+                                'Quantité vendue : $quantite',
+                                style: const TextStyle(
+                                  color: Colors.grey,
+                                  fontSize: 14,
+                                ),
+                              ),
+
+                              const SizedBox(height: 6),
+
+                              Text(
+                                '${formaterMontant(sousTotal)} FCFA',
+                                style: const TextStyle(
+                                  color: couleurPrincipale,
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ],
+                          ),
+                        );
+                      }),
+
+                      if (produits.length > 1) ...[
+                        const Divider(),
+
+                        Text(
+                          'Total : ${formaterMontant(montantTotal)} FCFA',
+                          style: const TextStyle(
+                            color: couleurPrincipale,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+          ),
+
+          // TROIS POINTS
+          IconButton(
+            tooltip: 'Actions',
+            onPressed: () {
+              ouvrirActions(venteId: venteId, vente: vente);
+            },
+            icon: const Icon(
+              Icons.more_vert,
+              color: couleurPrincipale,
+              size: 28,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // INTERFACE
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF5F6F8),
+      backgroundColor: couleurFond,
+
       appBar: AppBar(
-        backgroundColor: const Color(0xFF15576B),
-        foregroundColor: Colors.white,
-        elevation: 0,
+        toolbarHeight: 82,
         title: const Text(
           'Ventes',
-          style: TextStyle(
-            fontWeight: FontWeight.bold,
-          ),
+          style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
         ),
       ),
+
       floatingActionButton: FloatingActionButton.extended(
-        backgroundColor: const Color(0xFF15576B),
-        foregroundColor: Colors.white,
-        onPressed: nouvelleVente,
-        icon: const Icon(Icons.add),
-        label: const Text('Nouvelle vente'),
+        onPressed: () {
+          ouvrirFormulaire();
+        },
+        icon: const Icon(Icons.add, size: 27),
+        label: const Text(
+          'Nouvelle vente',
+          style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+        ),
       ),
-      body: StreamBuilder<
-          QuerySnapshot<Map<String, dynamic>>>(
-        stream: firestoreService.ventes
-            .orderBy(
-              'date',
-              descending: true,
-            )
-            .snapshots(),
+
+      body: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+        stream: firestoreService.ventes.snapshots(),
+
         builder: (context, snapshot) {
-          if (snapshot.hasError) {
+          if (snapshot.connectionState == ConnectionState.waiting &&
+              !snapshot.hasData) {
             return const Center(
+              child: CircularProgressIndicator(color: couleurPrincipale),
+            );
+          }
+
+          if (snapshot.hasError) {
+            return Center(
               child: Text(
-                'Impossible de charger les ventes.',
+                'Impossible de charger les ventes.\n'
+                '${snapshot.error}',
+                textAlign: TextAlign.center,
               ),
             );
           }
 
-          if (!snapshot.hasData) {
-            return const Center(
-              child: CircularProgressIndicator(),
-            );
-          }
+          final ventes = List<QueryDocumentSnapshot<Map<String, dynamic>>>.from(
+            snapshot.data?.docs ?? [],
+          );
 
-          final ventes = snapshot.data!.docs;
+          // TRI
+
+          ventes.sort((a, b) {
+            final dateA = a.data()['date'];
+
+            final dateB = b.data()['date'];
+
+            if (dateA is Timestamp && dateB is Timestamp) {
+              return dateB.compareTo(dateA);
+            }
+
+            if (dateA is Timestamp) {
+              return -1;
+            }
+
+            if (dateB is Timestamp) {
+              return 1;
+            }
+
+            return 0;
+          });
+
+          // TOTAL
 
           double chiffreAffaires = 0;
 
-          for (final vente in ventes) {
-            final montant =
-                vente.data()['montantTotal'] ?? 0;
-
-            if (montant is num) {
-              chiffreAffaires += montant.toDouble();
-            }
+          for (final document in ventes) {
+            chiffreAffaires +=
+                (document.data()['montantTotal'] as num?)?.toDouble() ?? 0;
           }
 
           return Column(
             children: [
-              Container(
-                width: double.infinity,
-                margin: const EdgeInsets.all(16),
-                padding: const EdgeInsets.all(20),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF15576B),
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: Column(
-                  crossAxisAlignment:
-                      CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      'Chiffre d’affaires total',
-                      style: TextStyle(
-                        color: Colors.white70,
-                        fontSize: 15,
-                      ),
-                    ),
-
-                    const SizedBox(height: 8),
-
-                    Text(
-                      '${chiffreAffaires.toStringAsFixed(0)} FCFA',
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 28,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-
-                    const SizedBox(height: 10),
-
-                    Text(
-                      '${ventes.length} vente(s) enregistrée(s)',
-                      style: const TextStyle(
-                        color: Colors.white70,
-                      ),
-                    ),
-                  ],
-                ),
+              carteTotalVentes(
+                chiffreAffaires: chiffreAffaires,
+                nombreVentes: ventes.length,
               ),
+
+              const SizedBox(height: 5),
 
               Expanded(
                 child: ventes.isEmpty
                     ? const Center(
-                        child: Column(
-                          mainAxisAlignment:
-                              MainAxisAlignment.center,
-                          children: [
-                            Icon(
-                              Icons.shopping_cart_outlined,
-                              size: 80,
-                              color: Color(0xFF15576B),
-                            ),
-                            SizedBox(height: 15),
-                            Text(
-                              'Aucune vente',
-                              style: TextStyle(
-                                fontSize: 20,
-                                fontWeight:
-                                    FontWeight.bold,
-                              ),
-                            ),
-                            SizedBox(height: 5),
-                            Text(
-                              'Vos ventes apparaîtront ici.',
-                            ),
-                          ],
+                        child: Text(
+                          'Aucune vente enregistrée.',
+                          style: TextStyle(color: Colors.grey),
                         ),
                       )
                     : ListView.builder(
-                        padding:
-                            const EdgeInsets.fromLTRB(
-                          16,
-                          0,
-                          16,
-                          100,
-                        ),
+                        padding: const EdgeInsets.fromLTRB(18, 8, 18, 105),
                         itemCount: ventes.length,
-                        itemBuilder:
-                            (context, index) {
-                          final document =
-                              ventes[index];
+                        itemBuilder: (context, index) {
+                          final document = ventes[index];
 
-                          final vente =
-                              document.data();
-
-                          final nomProduit =
-                              vente['nomProduit']
-                                      ?.toString() ??
-                                  '';
-
-                          final quantite =
-                              vente['quantite'] ?? 0;
-
-                          final montant =
-                              (vente['montantTotal'] ??
-                                      0)
-                                  as num;
-
-                          return Container(
-                            margin:
-                                const EdgeInsets.only(
-                              bottom: 12,
-                            ),
-                            padding:
-                                const EdgeInsets.all(
-                              16,
-                            ),
-                            decoration: BoxDecoration(
-                              color: Colors.white,
-                              borderRadius:
-                                  BorderRadius.circular(
-                                18,
-                              ),
-                            ),
-                            child: Row(
-                              children: [
-                                Container(
-                                  width: 52,
-                                  height: 52,
-                                  decoration:
-                                      BoxDecoration(
-                                    color:
-                                        const Color(
-                                      0xFFE0F2EE,
-                                    ),
-                                    borderRadius:
-                                        BorderRadius
-                                            .circular(
-                                      14,
-                                    ),
-                                  ),
-                                  child: const Icon(
-                                    Icons
-                                        .shopping_cart_outlined,
-                                    color: Color(
-                                      0xFF15576B,
-                                    ),
-                                  ),
-                                ),
-
-                                const SizedBox(
-                                  width: 14,
-                                ),
-
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment
-                                            .start,
-                                    children: [
-                                      Text(
-                                        nomProduit,
-                                        style:
-                                            const TextStyle(
-                                          fontSize: 17,
-                                          fontWeight:
-                                              FontWeight
-                                                  .bold,
-                                        ),
-                                      ),
-
-                                      const SizedBox(
-                                        height: 5,
-                                      ),
-
-                                      Text(
-                                        'Quantité vendue : $quantite',
-                                        style:
-                                            const TextStyle(
-                                          color:
-                                              Colors.grey,
-                                        ),
-                                      ),
-
-                                      const SizedBox(
-                                        height: 4,
-                                      ),
-
-                                      Text(
-                                        '${montant.toStringAsFixed(0)} FCFA',
-                                        style:
-                                            const TextStyle(
-                                          color: Color(
-                                            0xFF15576B,
-                                          ),
-                                          fontWeight:
-                                              FontWeight
-                                                  .bold,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-
-                                PopupMenuButton<String>(
-                                  onSelected: (value) {
-                                    if (value ==
-                                        'supprimer') {
-                                      supprimerVente(
-                                        document.id,
-                                        vente,
-                                      );
-                                    }
-                                  },
-                                  itemBuilder:
-                                      (context) => const [
-                                    PopupMenuItem(
-                                      value:
-                                          'supprimer',
-                                      child: Row(
-                                        children: [
-                                          Icon(
-                                            Icons
-                                                .delete_outline,
-                                            color:
-                                                Colors.red,
-                                          ),
-                                          SizedBox(
-                                            width: 8,
-                                          ),
-                                          Text(
-                                            'Supprimer',
-                                            style:
-                                                TextStyle(
-                                              color:
-                                                  Colors.red,
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ],
-                            ),
+                          return carteVente(
+                            venteId: document.id,
+                            vente: document.data(),
                           );
                         },
                       ),

@@ -2,6 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 
 import '../services/firestore_service.dart';
+import 'produit_form_page.dart';
 
 class ProduitsPage extends StatefulWidget {
   const ProduitsPage({super.key});
@@ -11,364 +12,176 @@ class ProduitsPage extends StatefulWidget {
 }
 
 class _ProduitsPageState extends State<ProduitsPage> {
-  final firestoreService = FirestoreService();
+  
+  // COULEURS
+  
 
-  Future<void> afficherFormulaire({
+  static const Color couleurPrincipale = Color(0xFF15576B);
+  static const Color couleurClaire = Color(0xFFE0F2EE);
+
+  
+  // FIRESTORE
+  
+
+  final FirestoreService firestoreService = FirestoreService();
+
+  
+  // FORMAT DES MONTANTS
+  
+  
+
+  String formaterMontant(num montant) {
+    final texte = montant.toStringAsFixed(0);
+    final resultat = StringBuffer();
+
+    for (int i = 0; i < texte.length; i++) {
+      final positionRestante = texte.length - i;
+
+      resultat.write(texte[i]);
+
+      if (positionRestante > 1 && positionRestante % 3 == 1) {
+        resultat.write(' ');
+      }
+    }
+
+    return resultat.toString();
+  }
+
+  
+  // OUVRIR LE FORMULAIRE AJOUT / MODIFICATION
+  
+
+  Future<void> ouvrirFormulaire({
     String? produitId,
     Map<String, dynamic>? produit,
   }) async {
-    final formKey = GlobalKey<FormState>();
-
-    final nomController = TextEditingController(
-      text: produit?['nom']?.toString() ?? '',
+    final resultat = await Navigator.of(context).push<bool>(
+      MaterialPageRoute(
+        builder: (_) => ProduitFormPage(produitId: produitId, produit: produit),
+      ),
     );
 
-    final quantiteController = TextEditingController(
-      text: produit?['quantite']?.toString() ?? '',
-    );
+    if (!mounted) {
+      return;
+    }
 
-    final prixController = TextEditingController(
-      text: produit?['prixUnitaire']?.toString() ?? '',
-    );
-
-    final seuilController = TextEditingController(
-      text: produit?['seuilAlerte']?.toString() ?? '',
-    );
-
-    final modification = produitId != null;
-
-    await showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (bottomSheetContext) {
-        return Padding(
-          padding: EdgeInsets.only(
-            bottom: MediaQuery.of(bottomSheetContext)
-                .viewInsets
-                .bottom,
+    if (resultat == true) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            produitId == null
+                ? 'Produit ajouté avec succès.'
+                : 'Produit modifié avec succès.',
           ),
-          child: Container(
-            padding: const EdgeInsets.all(24),
-            decoration: const BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.vertical(
-                top: Radius.circular(28),
-              ),
+        ),
+      );
+    }
+  }
+
+  
+  // AFFICHER LES ACTIONS
+  
+
+  Future<void> ouvrirActions({
+    required String produitId,
+    required Map<String, dynamic> produit,
+  }) async {
+    final action = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(18),
+          ),
+          title: const Text(
+            'Actions',
+            style: TextStyle(
+              color: couleurPrincipale,
+              fontWeight: FontWeight.bold,
             ),
-            child: SingleChildScrollView(
-              child: Form(
-                key: formKey,
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Container(
-                      width: 45,
-                      height: 5,
-                      decoration: BoxDecoration(
-                        color: Colors.grey.shade300,
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                    ),
-
-                    const SizedBox(height: 20),
-
-                    Text(
-                      modification
-                          ? 'Modifier le produit'
-                          : 'Ajouter un produit',
-                      style: const TextStyle(
-                        fontSize: 22,
-                        fontWeight: FontWeight.bold,
-                        color: Color(0xFF15576B),
-                      ),
-                    ),
-
-                    const SizedBox(height: 25),
-
-                    TextFormField(
-                      controller: nomController,
-                      decoration: const InputDecoration(
-                        labelText: 'Nom du produit',
-                        prefixIcon: Icon(
-                          Icons.inventory_2_outlined,
-                        ),
-                        border: OutlineInputBorder(),
-                      ),
-                      validator: (value) {
-                        if (value == null ||
-                            value.trim().isEmpty) {
-                          return 'Le nom du produit est obligatoire';
-                        }
-                        return null;
-                      },
-                    ),
-
-                    const SizedBox(height: 16),
-
-                    TextFormField(
-                      controller: quantiteController,
-                      keyboardType: TextInputType.number,
-                      decoration: const InputDecoration(
-                        labelText: 'Quantité',
-                        prefixIcon: Icon(
-                          Icons.numbers_outlined,
-                        ),
-                        border: OutlineInputBorder(),
-                      ),
-                      validator: (value) {
-                        if (value == null ||
-                            value.trim().isEmpty) {
-                          return 'La quantité est obligatoire';
-                        }
-
-                        final quantite =
-                            int.tryParse(value.trim());
-
-                        if (quantite == null ||
-                            quantite < 0) {
-                          return 'Veuillez saisir une quantité valide';
-                        }
-
-                        return null;
-                      },
-                    ),
-
-                    const SizedBox(height: 16),
-
-                    TextFormField(
-                      controller: prixController,
-                      keyboardType:
-                          const TextInputType.numberWithOptions(
-                        decimal: true,
-                      ),
-                      decoration: const InputDecoration(
-                        labelText: 'Prix unitaire (FCFA)',
-                        prefixIcon: Icon(
-                          Icons.payments_outlined,
-                        ),
-                        border: OutlineInputBorder(),
-                      ),
-                      validator: (value) {
-                        if (value == null ||
-                            value.trim().isEmpty) {
-                          return 'Le prix unitaire est obligatoire';
-                        }
-
-                        final prix =
-                            num.tryParse(value.trim());
-
-                        if (prix == null || prix < 0) {
-                          return 'Veuillez saisir un prix valide';
-                        }
-
-                        return null;
-                      },
-                    ),
-
-                    const SizedBox(height: 16),
-
-                    TextFormField(
-                      controller: seuilController,
-                      keyboardType: TextInputType.number,
-                      decoration: const InputDecoration(
-                        labelText: 'Seuil d’alerte',
-                        prefixIcon: Icon(
-                          Icons.warning_amber_outlined,
-                        ),
-                        border: OutlineInputBorder(),
-                      ),
-                      validator: (value) {
-                        if (value == null ||
-                            value.trim().isEmpty) {
-                          return 'Le seuil d’alerte est obligatoire';
-                        }
-
-                        final seuil =
-                            int.tryParse(value.trim());
-
-                        if (seuil == null || seuil < 0) {
-                          return 'Veuillez saisir un seuil valide';
-                        }
-
-                        return null;
-                      },
-                    ),
-
-                    const SizedBox(height: 25),
-
-                    SizedBox(
-                      width: double.infinity,
-                      height: 55,
-                      child: ElevatedButton.icon(
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor:
-                              const Color(0xFF15576B),
-                          foregroundColor: Colors.white,
-                        ),
-                        onPressed: () async {
-                          if (!formKey.currentState!
-                              .validate()) {
-                            return;
-                          }
-
-                          final donnees = {
-                            'nom': nomController.text.trim(),
-                            'quantite': int.parse(
-                              quantiteController.text.trim(),
-                            ),
-                            'prixUnitaire': num.parse(
-                              prixController.text.trim(),
-                            ),
-                            'seuilAlerte': int.parse(
-                              seuilController.text.trim(),
-                            ),
-                          };
-
-                          try {
-                            if (modification) {
-                              await firestoreService.produits
-                                  .doc(produitId)
-                                  .update(donnees);
-
-                              // Supprime les anciennes activités
-                              // liées à ce produit.
-                              final anciennesActivites =
-                                  await firestoreService.activites
-                                      .where(
-                                        'produitId',
-                                        isEqualTo: produitId,
-                                      )
-                                      .get();
-
-                              final batch =
-                                  FirebaseFirestore.instance.batch();
-
-                              for (final activite
-                                  in anciennesActivites.docs) {
-                                batch.delete(
-                                  activite.reference,
-                                );
-                              }
-
-                              // Nouvelle activité.
-                              final activiteReference =
-                                  firestoreService.activites.doc();
-
-                              batch.set(
-                                activiteReference,
-                                {
-                                  'titre': 'Produit modifié',
-                                  'description':
-                                      nomController.text.trim(),
-                                  'type': 'produit',
-                                  'produitId': produitId,
-                                  'date':
-                                      FieldValue.serverTimestamp(),
-                                },
-                              );
-
-                              await batch.commit();
-                            } else {
-                              final nouveauProduit =
-                                  await firestoreService.produits
-                                      .add({
-                                ...donnees,
-                                'dateCreation':
-                                    FieldValue.serverTimestamp(),
-                              });
-
-                              await firestoreService.activites
-                                  .add({
-                                'titre': 'Nouveau produit',
-                                'description':
-                                    nomController.text.trim(),
-                                'type': 'produit',
-                                'produitId':
-                                    nouveauProduit.id,
-                                'date':
-                                    FieldValue.serverTimestamp(),
-                              });
-                            }
-
-                            if (!bottomSheetContext.mounted) {
-                              return;
-                            }
-
-                            Navigator.pop(bottomSheetContext);
-
-                            if (!mounted) return;
-
-                            ScaffoldMessenger.of(context)
-                                .showSnackBar(
-                              SnackBar(
-                                content: Text(
-                                  modification
-                                      ? 'Produit modifié avec succès'
-                                      : 'Produit ajouté avec succès',
-                                ),
-                              ),
-                            );
-                          } catch (e) {
-                            if (!mounted) return;
-
-                            ScaffoldMessenger.of(context)
-                                .showSnackBar(
-                              const SnackBar(
-                                content: Text(
-                                  'Une erreur est survenue.',
-                                ),
-                              ),
-                            );
-                          }
-                        },
-                        icon: Icon(
-                          modification
-                              ? Icons.save_outlined
-                              : Icons.add,
-                        ),
-                        label: Text(
-                          modification
-                              ? 'Enregistrer'
-                              : 'Ajouter le produit',
-                        ),
-                      ),
-                    ),
-
-                    const SizedBox(height: 15),
-                  ],
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              
+              // MODIFIER
+              
+              ListTile(
+                leading: const Icon(
+                  Icons.edit_outlined,
+                  color: couleurPrincipale,
                 ),
+                title: const Text('Modifier'),
+                onTap: () {
+                  Navigator.of(dialogContext).pop('modifier');
+                },
               ),
-            ),
+
+              
+              // SUPPRIMER
+              
+              ListTile(
+                leading: const Icon(Icons.delete_outline, color: Colors.red),
+                title: const Text('Supprimer'),
+                onTap: () {
+                  Navigator.of(dialogContext).pop('supprimer');
+                },
+              ),
+            ],
           ),
         );
       },
     );
 
-    nomController.dispose();
-    quantiteController.dispose();
-    prixController.dispose();
-    seuilController.dispose();
+    if (!mounted || action == null) {
+      return;
+    }
+
+    // Le premier dialogue est déjà fermé avant
+    // d'effectuer l'action suivante.
+
+    if (action == 'modifier') {
+      await ouvrirFormulaire(produitId: produitId, produit: produit);
+    }
+
+    if (action == 'supprimer') {
+      await supprimerProduit(produitId: produitId, produit: produit);
+    }
   }
 
-  Future<void> supprimerProduit(
-    String produitId,
-    String nomProduit,
-  ) async {
+  
+  // SUPPRIMER UN PRODUIT
+  
+
+  Future<void> supprimerProduit({
+    required String produitId,
+    required Map<String, dynamic> produit,
+  }) async {
+    final nom = produit['nom']?.toString() ?? 'ce produit';
+
+    
+    // CONFIRMATION
+    
+
     final confirmation = await showDialog<bool>(
       context: context,
       builder: (dialogContext) {
         return AlertDialog(
-          title: const Text('Supprimer le produit'),
-          content: Text(
-            'Voulez-vous vraiment supprimer "$nomProduit" ?\n\n'
-            'Les ventes, approvisionnements et activités '
-            'liés à ce produit seront également supprimés.',
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(18),
           ),
+          title: const Text(
+            'Supprimer le produit',
+            style: TextStyle(
+              color: couleurPrincipale,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          content: Text('Voulez-vous vraiment supprimer "$nom" ?'),
           actions: [
             TextButton(
               onPressed: () {
-                Navigator.pop(dialogContext, false);
+                Navigator.of(dialogContext).pop(false);
               },
               child: const Text('Annuler'),
             ),
@@ -378,7 +191,7 @@ class _ProduitsPageState extends State<ProduitsPage> {
                 foregroundColor: Colors.white,
               ),
               onPressed: () {
-                Navigator.pop(dialogContext, true);
+                Navigator.of(dialogContext).pop(true);
               },
               child: const Text('Supprimer'),
             ),
@@ -387,321 +200,333 @@ class _ProduitsPageState extends State<ProduitsPage> {
       },
     );
 
-    if (confirmation != true) return;
+    if (!mounted || confirmation != true) {
+      return;
+    }
 
     try {
-      // Récupération de toutes les données liées.
-      final activites = await firestoreService.activites
-          .where(
-            'produitId',
-            isEqualTo: produitId,
-          )
+      
+      // RÉCUPÉRER LES ACTIVITÉS LIÉES AU PRODUIT
+      
+
+      final activitesSnapshot = await firestoreService.activites
+          .where('produitId', isEqualTo: produitId)
           .get();
 
-      final ventes = await firestoreService.ventes
-          .where(
-            'produitId',
-            isEqualTo: produitId,
-          )
-          .get();
-
-      final approvisionnements =
-          await firestoreService.approvisionnements
-              .where(
-                'produitId',
-                isEqualTo: produitId,
-              )
-              .get();
+      
+      // BATCH FIRESTORE
+      
 
       final batch = FirebaseFirestore.instance.batch();
 
-      // Suppression des activités.
-      for (final activite in activites.docs) {
-        batch.delete(activite.reference);
-      }
+      // Supprimer le produit.
+      batch.delete(firestoreService.produits.doc(produitId));
 
-      // Suppression des ventes.
-      for (final vente in ventes.docs) {
-        batch.delete(vente.reference);
-      }
+      
+      // SUPPRIMER LES ACTIVITÉS DE TYPE PRODUIT
+      
+      // Les ventes et approvisionnements historiques
+      // ne sont pas supprimés.
+      
 
-      // Suppression des approvisionnements.
-      for (final approvisionnement
-          in approvisionnements.docs) {
-        batch.delete(approvisionnement.reference);
-      }
+      for (final document in activitesSnapshot.docs) {
+        final activite = document.data();
 
-      // Suppression du produit.
-      batch.delete(
-        firestoreService.produits.doc(produitId),
-      );
+        if (activite['type'] == 'produit') {
+          batch.delete(document.reference);
+        }
+      }
 
       await batch.commit();
 
-      if (!mounted) return;
+      if (!mounted) {
+        return;
+      }
 
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            'Produit et toutes ses données associées supprimés.',
-          ),
+        const SnackBar(content: Text('Produit supprimé avec succès.')),
+      );
+    } on FirebaseException catch (e) {
+      if (!mounted) {
+        return;
+      }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(e.message ?? 'Impossible de supprimer le produit.'),
         ),
       );
-    } catch (e) {
-      if (!mounted) return;
+    } catch (_) {
+      if (!mounted) {
+        return;
+      }
 
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text(
-            'Impossible de supprimer le produit.',
-          ),
+          content: Text('Une erreur est survenue pendant la suppression.'),
         ),
       );
     }
   }
 
+  
+  // CARTE D'UN PRODUIT
+  
+
+  Widget carteProduit({
+    required String produitId,
+    required Map<String, dynamic> produit,
+  }) {
+    final nom = produit['nom']?.toString() ?? 'Produit';
+
+    final quantite = (produit['quantite'] as num?)?.toInt() ?? 0;
+
+    final prix = (produit['prixUnitaire'] as num?)?.toDouble() ?? 0;
+
+    final seuil = (produit['seuil'] as num?)?.toInt() ?? 0;
+
+    // Un produit passe en alerte lorsque sa quantité
+    // devient inférieure ou égale au seuil.
+    final enAlerte = quantite <= seuil;
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(18),
+
+        // Petite bordure orange en cas d'alerte.
+        border: enAlerte
+            ? Border.all(color: Colors.orange.withOpacity(0.5))
+            : null,
+
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.03),
+            blurRadius: 8,
+            offset: const Offset(0, 3),
+          ),
+        ],
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          
+          // ICÔNE DU PRODUIT
+          
+          Container(
+            width: 48,
+            height: 48,
+            decoration: BoxDecoration(
+              color: enAlerte ? Colors.orange.withOpacity(0.12) : couleurClaire,
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: Icon(
+              enAlerte
+                  ? Icons.warning_amber_rounded
+                  : Icons.inventory_2_outlined,
+              color: enAlerte ? Colors.orange : couleurPrincipale,
+            ),
+          ),
+
+          const SizedBox(width: 14),
+
+          
+          // INFORMATIONS DU PRODUIT
+          
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  nom,
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    color: couleurPrincipale,
+                  ),
+                ),
+
+                const SizedBox(height: 8),
+
+                Text('Qté : $quantite', style: const TextStyle(fontSize: 13)),
+
+                const SizedBox(height: 4),
+
+                Text(
+                  'P.U. : ${formaterMontant(prix)} FCFA',
+                  style: const TextStyle(fontSize: 13),
+                ),
+
+                const SizedBox(height: 4),
+
+                Text('Seuil : $seuil', style: const TextStyle(fontSize: 13)),
+
+                
+                // ALERTE
+                
+                if (enAlerte) ...[
+                  const SizedBox(height: 7),
+                  const Text(
+                    'Stock en alerte',
+                    style: TextStyle(
+                      color: Colors.orange,
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+
+          
+          // BOUTON TROIS POINTS
+          
+          IconButton(
+            tooltip: 'Actions',
+            icon: const Icon(Icons.more_vert, color: couleurPrincipale),
+            onPressed: () {
+              ouvrirActions(produitId: produitId, produit: produit);
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  
+  // INTERFACE DE LA PAGE
+  
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFFF5F6F8),
-      appBar: AppBar(
-        backgroundColor: const Color(0xFF15576B),
-        foregroundColor: Colors.white,
-        elevation: 0,
-        title: const Text(
-          'Produits',
-          style: TextStyle(
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-      ),
+
+      
+      // BARRE DU HAUT
+      
+      appBar: AppBar(title: const Text('Produits')),
+
+      
+      // BOUTON AJOUTER
+      
       floatingActionButton: FloatingActionButton.extended(
-        backgroundColor: const Color(0xFF15576B),
-        foregroundColor: Colors.white,
         onPressed: () {
-          afficherFormulaire();
+          ouvrirFormulaire();
         },
         icon: const Icon(Icons.add),
-        label: const Text('Ajouter'),
+        label: const Text('Nouveau produit'),
       ),
-      body: StreamBuilder<
-          QuerySnapshot<Map<String, dynamic>>>(
-        stream: firestoreService.produits
-            .orderBy(
-              'dateCreation',
-              descending: true,
-            )
-            .snapshots(),
+
+      
+      // PRODUITS FIRESTORE
+      
+      body: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+       
+        
+        // Nous n'utilisons volontairement PAS :
+        // .orderBy('dateCreation')
+        // afin que les anciens produits qui n'ont pas encore
+        // dateCreation soient aussi affichés.
+        stream: firestoreService.produits.snapshots(),
+
         builder: (context, snapshot) {
-          if (snapshot.hasError) {
+          
+          // CHARGEMENT
+          
+
+          if (snapshot.connectionState == ConnectionState.waiting &&
+              !snapshot.hasData) {
             return const Center(
-              child: Text(
-                'Impossible de charger les produits.',
+              child: CircularProgressIndicator(color: couleurPrincipale),
+            );
+          }
+
+          
+          // ERREUR
+          
+
+          if (snapshot.hasError) {
+            return Center(
+              child: Padding(
+                padding: const EdgeInsets.all(25),
+                child: Text(
+                  'Impossible de charger les produits.\n'
+                  '${snapshot.error}',
+                  textAlign: TextAlign.center,
+                ),
               ),
             );
           }
 
-          if (!snapshot.hasData) {
-            return const Center(
-              child: CircularProgressIndicator(),
-            );
-          }
+          final produits = snapshot.data?.docs ?? [];
 
-          final produits = snapshot.data!.docs;
+          
+          // AUCUN PRODUIT
+          
 
           if (produits.isEmpty) {
-            return const Center(
-              child: Column(
-                mainAxisAlignment:
-                    MainAxisAlignment.center,
-                children: [
-                  Icon(
-                    Icons.inventory_2_outlined,
-                    size: 80,
-                    color: Color(0xFF15576B),
-                  ),
-                  SizedBox(height: 15),
-                  Text(
-                    'Aucun produit',
-                    style: TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  SizedBox(height: 5),
-                  Text(
-                    'Ajoutez votre premier produit.',
-                  ),
-                ],
-              ),
-            );
-          }
-
-          return ListView.builder(
-            padding: const EdgeInsets.fromLTRB(
-              16,
-              16,
-              16,
-              100,
-            ),
-            itemCount: produits.length,
-            itemBuilder: (context, index) {
-              final document = produits[index];
-              final produit = document.data();
-
-              final nom =
-                  produit['nom']?.toString() ?? '';
-
-              final quantite =
-                  produit['quantite'] ?? 0;
-
-              final prix =
-                  produit['prixUnitaire'] ?? 0;
-
-              final seuil =
-                  produit['seuilAlerte'] ?? 0;
-
-              final alerte =
-                  quantite <= seuil;
-
-              return Container(
-                margin: const EdgeInsets.only(
-                  bottom: 12,
-                ),
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius:
-                      BorderRadius.circular(18),
-                  border: alerte
-                      ? Border.all(
-                          color: Colors.red.shade300,
-                        )
-                      : null,
-                ),
-                child: Row(
+            return Center(
+              child: Padding(
+                padding: const EdgeInsets.all(30),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
                   children: [
                     Container(
-                      width: 52,
-                      height: 52,
-                      decoration: BoxDecoration(
-                        color: alerte
-                            ? Colors.red.shade50
-                            : const Color(0xFFE0F2EE),
-                        borderRadius:
-                            BorderRadius.circular(14),
+                      width: 85,
+                      height: 85,
+                      decoration: const BoxDecoration(
+                        color: couleurClaire,
+                        shape: BoxShape.circle,
                       ),
-                      child: Icon(
-                        alerte
-                            ? Icons.warning_amber_outlined
-                            : Icons.inventory_2_outlined,
-                        color: alerte
-                            ? Colors.red
-                            : const Color(0xFF15576B),
+                      child: const Icon(
+                        Icons.inventory_2_outlined,
+                        color: couleurPrincipale,
+                        size: 42,
                       ),
                     ),
 
-                    const SizedBox(width: 14),
+                    const SizedBox(height: 20),
 
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment:
-                            CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            nom,
-                            style: const TextStyle(
-                              fontSize: 17,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-
-                          const SizedBox(height: 5),
-
-                          Text(
-                            'Qté : $quantite',
-                            style: const TextStyle(
-                              color: Colors.grey,
-                            ),
-                          ),
-
-                          const SizedBox(height: 4),
-
-                          Text(
-                            'P.U : $prix FCFA',
-                            style: const TextStyle(
-                              color: Colors.grey,
-                            ),
-                          ),
-
-                          if (alerte) ...[
-                            const SizedBox(height: 6),
-                            Text(
-                              'Stock faible — seuil : $seuil',
-                              style: const TextStyle(
-                                color: Colors.red,
-                                fontWeight:
-                                    FontWeight.w600,
-                              ),
-                            ),
-                          ],
-                        ],
+                    const Text(
+                      'Aucun produit',
+                      style: TextStyle(
+                        color: couleurPrincipale,
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
                       ),
                     ),
 
-                    PopupMenuButton<String>(
-                      icon: const Icon(
-                        Icons.more_vert,
-                        color: Color(0xFF15576B),
-                      ),
-                      onSelected: (value) {
-                        if (value == 'modifier') {
-                          afficherFormulaire(
-                            produitId: document.id,
-                            produit: produit,
-                          );
-                        }
+                    const SizedBox(height: 8),
 
-                        if (value == 'supprimer') {
-                          supprimerProduit(
-                            document.id,
-                            nom,
-                          );
-                        }
-                      },
-                      itemBuilder: (context) => const [
-                        PopupMenuItem(
-                          value: 'modifier',
-                          child: Row(
-                            children: [
-                              Icon(Icons.edit_outlined),
-                              SizedBox(width: 10),
-                              Text('Modifier'),
-                            ],
-                          ),
-                        ),
-                        PopupMenuItem(
-                          value: 'supprimer',
-                          child: Row(
-                            children: [
-                              Icon(
-                                Icons.delete_outline,
-                                color: Colors.red,
-                              ),
-                              SizedBox(width: 10),
-                              Text(
-                                'Supprimer',
-                                style: TextStyle(
-                                  color: Colors.red,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
+                    const Text(
+                      'Appuyez sur "Nouveau produit" '
+                      'pour enregistrer votre premier produit.',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(color: Colors.grey),
                     ),
                   ],
                 ),
+              ),
+            );
+          }
+
+          
+          // LISTE DES PRODUITS
+          
+
+          return ListView.builder(
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
+            itemCount: produits.length,
+            itemBuilder: (context, index) {
+              final document = produits[index];
+
+              return carteProduit(
+                produitId: document.id,
+                produit: document.data(),
               );
             },
           );
